@@ -1,18 +1,19 @@
 //
 //  ContentView.swift
-//  visonPro
+//  visionPro
 //
-//  Created by Jean Pierre on 22/06/26.
+//  Created by Jean Pierre on 23/06/26.
 //
 
 import SwiftUI
 import RealityKit
+import RealityKitContent
 
 struct ContentView: View {
 
     var body: some View {
         VStack {
-            Model3D(named: "Scene", bundle: .main)
+            Model3D(named: "Scene", bundle: realityKitContentBundle)
                 .padding(.bottom, 50)
 
             Text("Hello, world!")
