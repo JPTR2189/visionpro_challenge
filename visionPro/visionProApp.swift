@@ -17,6 +17,7 @@ struct visionProApp: App {
             ContentView()
                 .environment(appModel)
         }
+        .windowStyle(.volumetric)
 
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
             ImmersiveView()

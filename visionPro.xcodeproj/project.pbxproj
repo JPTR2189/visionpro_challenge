@@ -7,29 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F7AD2D662FEAE90100CCB91E /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = F7AD2D652FEAE90100CCB91E /* RealityKitContent */; };
+		F71994AF2FEB69410038BF9B /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = F71994AE2FEB69410038BF9B /* RealityKitContent */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		F7AD2D602FEAE90100CCB91E /* visionPro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = visionPro.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F7AD2D642FEAE90100CCB91E /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
+		F71994A92FEB69410038BF9B /* visionPro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = visionPro.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F71994AD2FEB69410038BF9B /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		F7AD2D702FEAE90200CCB91E /* Exceptions for "visionPro" folder in "visionPro" target */ = {
+		F71994B92FEB69420038BF9B /* Exceptions for "visionPro" folder in "visionPro" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = F7AD2D5F2FEAE90100CCB91E /* visionPro */;
+			target = F71994A82FEB69410038BF9B /* visionPro */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		F7AD2D622FEAE90100CCB91E /* visionPro */ = {
+		F71994AB2FEB69410038BF9B /* visionPro */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				F7AD2D702FEAE90200CCB91E /* Exceptions for "visionPro" folder in "visionPro" target */,
+				F71994B92FEB69420038BF9B /* Exceptions for "visionPro" folder in "visionPro" target */,
 			);
 			path = visionPro;
 			sourceTree = "<group>";
@@ -37,38 +37,38 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		F7AD2D5D2FEAE90100CCB91E /* Frameworks */ = {
+		F71994A62FEB69410038BF9B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F7AD2D662FEAE90100CCB91E /* RealityKitContent in Frameworks */,
+				F71994AF2FEB69410038BF9B /* RealityKitContent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		F7AD2D572FEAE90100CCB91E = {
+		F71994A02FEB69410038BF9B = {
 			isa = PBXGroup;
 			children = (
-				F7AD2D622FEAE90100CCB91E /* visionPro */,
-				F7AD2D632FEAE90100CCB91E /* Packages */,
-				F7AD2D612FEAE90100CCB91E /* Products */,
+				F71994AB2FEB69410038BF9B /* visionPro */,
+				F71994AC2FEB69410038BF9B /* Packages */,
+				F71994AA2FEB69410038BF9B /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		F7AD2D612FEAE90100CCB91E /* Products */ = {
+		F71994AA2FEB69410038BF9B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F7AD2D602FEAE90100CCB91E /* visionPro.app */,
+				F71994A92FEB69410038BF9B /* visionPro.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		F7AD2D632FEAE90100CCB91E /* Packages */ = {
+		F71994AC2FEB69410038BF9B /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				F7AD2D642FEAE90100CCB91E /* RealityKitContent */,
+				F71994AD2FEB69410038BF9B /* RealityKitContent */,
 			);
 			path = Packages;
 			sourceTree = "<group>";
@@ -76,65 +76,65 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F7AD2D5F2FEAE90100CCB91E /* visionPro */ = {
+		F71994A82FEB69410038BF9B /* visionPro */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F7AD2D712FEAE90200CCB91E /* Build configuration list for PBXNativeTarget "visionPro" */;
+			buildConfigurationList = F71994BA2FEB69420038BF9B /* Build configuration list for PBXNativeTarget "visionPro" */;
 			buildPhases = (
-				F7AD2D5C2FEAE90100CCB91E /* Sources */,
-				F7AD2D5D2FEAE90100CCB91E /* Frameworks */,
-				F7AD2D5E2FEAE90100CCB91E /* Resources */,
+				F71994A52FEB69410038BF9B /* Sources */,
+				F71994A62FEB69410038BF9B /* Frameworks */,
+				F71994A72FEB69410038BF9B /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F7AD2D622FEAE90100CCB91E /* visionPro */,
+				F71994AB2FEB69410038BF9B /* visionPro */,
 			);
 			name = visionPro;
 			packageProductDependencies = (
-				F7AD2D652FEAE90100CCB91E /* RealityKitContent */,
+				F71994AE2FEB69410038BF9B /* RealityKitContent */,
 			);
 			productName = visionPro;
-			productReference = F7AD2D602FEAE90100CCB91E /* visionPro.app */;
+			productReference = F71994A92FEB69410038BF9B /* visionPro.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		F7AD2D582FEAE90100CCB91E /* Project object */ = {
+		F71994A12FEB69410038BF9B /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
-					F7AD2D5F2FEAE90100CCB91E = {
+					F71994A82FEB69410038BF9B = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
 				};
 			};
-			buildConfigurationList = F7AD2D5B2FEAE90100CCB91E /* Build configuration list for PBXProject "visionPro" */;
+			buildConfigurationList = F71994A42FEB69410038BF9B /* Build configuration list for PBXProject "visionPro" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = F7AD2D572FEAE90100CCB91E;
+			mainGroup = F71994A02FEB69410038BF9B;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = F7AD2D612FEAE90100CCB91E /* Products */;
+			productRefGroup = F71994AA2FEB69410038BF9B /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				F7AD2D5F2FEAE90100CCB91E /* visionPro */,
+				F71994A82FEB69410038BF9B /* visionPro */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		F7AD2D5E2FEAE90100CCB91E /* Resources */ = {
+		F71994A72FEB69410038BF9B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -144,7 +144,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		F7AD2D5C2FEAE90100CCB91E /* Sources */ = {
+		F71994A52FEB69410038BF9B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -154,7 +154,7 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		F7AD2D722FEAE90200CCB91E /* Debug */ = {
+		F71994BB2FEB69420038BF9B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -183,7 +183,7 @@
 			};
 			name = Debug;
 		};
-		F7AD2D732FEAE90200CCB91E /* Release */ = {
+		F71994BC2FEB69420038BF9B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -212,7 +212,7 @@
 			};
 			name = Release;
 		};
-		F7AD2D742FEAE90200CCB91E /* Debug */ = {
+		F71994BD2FEB69420038BF9B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -276,7 +276,7 @@
 			};
 			name = Debug;
 		};
-		F7AD2D752FEAE90200CCB91E /* Release */ = {
+		F71994BE2FEB69420038BF9B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -336,20 +336,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F7AD2D5B2FEAE90100CCB91E /* Build configuration list for PBXProject "visionPro" */ = {
+		F71994A42FEB69410038BF9B /* Build configuration list for PBXProject "visionPro" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F7AD2D742FEAE90200CCB91E /* Debug */,
-				F7AD2D752FEAE90200CCB91E /* Release */,
+				F71994BD2FEB69420038BF9B /* Debug */,
+				F71994BE2FEB69420038BF9B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F7AD2D712FEAE90200CCB91E /* Build configuration list for PBXNativeTarget "visionPro" */ = {
+		F71994BA2FEB69420038BF9B /* Build configuration list for PBXNativeTarget "visionPro" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F7AD2D722FEAE90200CCB91E /* Debug */,
-				F7AD2D732FEAE90200CCB91E /* Release */,
+				F71994BB2FEB69420038BF9B /* Debug */,
+				F71994BC2FEB69420038BF9B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -357,11 +357,11 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		F7AD2D652FEAE90100CCB91E /* RealityKitContent */ = {
+		F71994AE2FEB69410038BF9B /* RealityKitContent */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RealityKitContent;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = F7AD2D582FEAE90100CCB91E /* Project object */;
+	rootObject = F71994A12FEB69410038BF9B /* Project object */;
 }
