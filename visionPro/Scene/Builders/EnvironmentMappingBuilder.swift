@@ -11,8 +11,13 @@ enum EnvironmentMappingBuilder {
         for anchor: PlaneAnchor,
         wallOpacity: Float,
         floorOpacity: Float,
-        wallMaterial: (any RealityKit.Material)? = nil
+        wallMaterial: (any RealityKit.Material)? = nil,
+        debugMode: Bool = false
     ) -> ModelEntity? {
+        if debugMode {
+            return makeDebugEntity(for: anchor)
+        }
+
         switch anchor.classification {
         case .wall:
             return makeWallEntity(for: anchor, opacity: wallOpacity, customMaterial: wallMaterial)
@@ -23,7 +28,28 @@ enum EnvironmentMappingBuilder {
         }
     }
 
-    // MARK: - Construção de Parede
+    // MARK: - Debug: Todas as classificações visíveis com cores únicas
+
+    private static func makeDebugEntity(for anchor: PlaneAnchor) -> ModelEntity {
+        let color = debugColor(for: anchor.classification)
+        let entity = makeColoredEntity(for: anchor, color: color, opacity: 0.55, tag: WallPlaneComponent())
+        return entity
+    }
+
+    private static func debugColor(for classification: PlaneAnchor.Classification) -> UIColor {
+        switch classification {
+        case .wall:     return .systemBlue
+        case .floor:    return .systemRed
+        case .ceiling:  return .systemGreen
+        case .table:    return .systemYellow
+        case .seat:     return .systemOrange
+        case .window:   return .cyan
+        case .door:     return .systemPurple
+        default:        return .white
+        }
+    }
+
+    // MARK: - Construção de Parede (com textura ou fallback)
 
     private static func makeWallEntity(
         for anchor: PlaneAnchor,
@@ -44,7 +70,7 @@ enum EnvironmentMappingBuilder {
         return entity
     }
 
-    // MARK: - Construção de Chão (colorido)
+    // MARK: - Construção de Plano Colorido (chão e debug)
 
     private static func makeColoredEntity<Tag: Component>(
         for anchor: PlaneAnchor,
@@ -67,7 +93,7 @@ enum EnvironmentMappingBuilder {
         return entity
     }
 
-    // MARK: - Fallback (sem USDZ carregado)
+    // MARK: - Fallback
 
     private static func fallbackWallMaterial(opacity: Float) -> any RealityKit.Material {
         var material = UnlitMaterial()
