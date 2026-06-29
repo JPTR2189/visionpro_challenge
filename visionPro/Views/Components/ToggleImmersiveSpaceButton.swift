@@ -2,8 +2,6 @@
 //  ToggleImmersiveSpaceButton.swift
 //  visionPro
 //
-//  Created by Jean Pierre on 23/06/26.
-//
 
 import SwiftUI
 

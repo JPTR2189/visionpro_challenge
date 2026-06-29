@@ -2,8 +2,6 @@
 //  visionProApp.swift
 //  visionPro
 //
-//  Created by Jean Pierre on 23/06/26.
-//
 
 import SwiftUI
 
@@ -17,10 +15,9 @@ struct visionProApp: App {
             ContentView()
                 .environment(appModel)
         }
-        .windowStyle(.volumetric)
 
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
-            ImmersiveView()
+            HandSphereView()
                 .environment(appModel)
                 .onAppear {
                     appModel.immersiveSpaceState = .open
@@ -29,6 +26,6 @@ struct visionProApp: App {
                     appModel.immersiveSpaceState = .closed
                 }
         }
-        .immersionStyle(selection: .constant(.full), in: .full)
+        .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }

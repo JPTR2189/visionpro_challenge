@@ -2,8 +2,6 @@
 //  AppModel.swift
 //  visionPro
 //
-//  Created by Jean Pierre on 23/06/26.
-//
 
 import SwiftUI
 
@@ -18,4 +16,8 @@ class AppModel {
         case open
     }
     var immersiveSpaceState = ImmersiveSpaceState.closed
+
+    // 🧪 Temporário, só para testar a animação da esfera sem depender da mão.
+    // Remover esta propriedade quando o app estiver validado por completo.
+    var debugForceShow = false
 }
