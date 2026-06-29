@@ -1,18 +1,22 @@
-//
-//  visionProApp.swift
-//  visionPro
-//
-//  Created by Jean Pierre on 23/06/26.
-//
-
 import SwiftUI
+import RealityKit
 
 @main
 struct visionProApp: App {
 
     @State private var appModel = AppModel()
 
-    var body: some Scene {
+    init() {
+        OceanTileComponent.registerComponent()
+        EnvironmentOrbitComponent.registerComponent()
+        KayakMotionComponent.registerComponent()
+        WallPlaneComponent.registerComponent()
+        FloorPlaneComponent.registerComponent()
+        OceanMotionSystem.registerSystem()
+        KayakMotionSystem.registerSystem()
+    }
+
+    var body: some SwiftUI.Scene {
         WindowGroup {
             ContentView()
                 .environment(appModel)
@@ -22,13 +26,17 @@ struct visionProApp: App {
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
             ImmersiveView()
                 .environment(appModel)
-                .onAppear {
-                    appModel.immersiveSpaceState = .open
-                }
-                .onDisappear {
-                    appModel.immersiveSpaceState = .closed
-                }
+                .onAppear  { appModel.immersiveSpaceState = .open   }
+                .onDisappear { appModel.immersiveSpaceState = .closed }
         }
         .immersionStyle(selection: .constant(.full), in: .full)
+
+        ImmersiveSpace(id: appModel.portalSpaceID) {
+            PortalExperienceView()
+                .environment(appModel)
+                .onAppear  { appModel.portalSpaceState = .open   }
+                .onDisappear { appModel.portalSpaceState = .closed }
+        }
+        .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }
