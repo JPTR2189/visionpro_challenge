@@ -7,13 +7,8 @@ struct visionProApp: App {
     @State private var appModel = AppModel()
 
     init() {
-        OceanTileComponent.registerComponent()
-        EnvironmentOrbitComponent.registerComponent()
-        KayakMotionComponent.registerComponent()
         WallPlaneComponent.registerComponent()
         FloorPlaneComponent.registerComponent()
-        OceanMotionSystem.registerSystem()
-        KayakMotionSystem.registerSystem()
     }
 
     var body: some SwiftUI.Scene {

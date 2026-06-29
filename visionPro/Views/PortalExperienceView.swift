@@ -6,16 +6,20 @@ struct PortalExperienceView: View {
 
     @State private var arSession  = ARKitSessionManager()
     @State private var sceneRoot  = Entity()
+    @State private var wallMaterial: (any RealityKit.Material)?
 
     var body: some View {
         RealityView { content in
             content.add(sceneRoot)
         }
         .task {
+            wallMaterial = await TextureMaterialLoader.loadWallMaterial()
+        }
+        .task {
             await arSession.run()
         }
         .task {
-            await processPlanUpdates()
+            await processPlaneUpdates()
         }
         .overlay(alignment: .bottom) {
             if arSession.authorizationDenied {
@@ -27,7 +31,7 @@ struct PortalExperienceView: View {
     // MARK: - Processamento de Anchors
 
     @MainActor
-    private func processPlanUpdates() async {
+    private func processPlaneUpdates() async {
         for await update in arSession.planeUpdates {
             switch update.event {
             case .added, .updated:
@@ -45,7 +49,8 @@ struct PortalExperienceView: View {
         guard let entity = EnvironmentMappingBuilder.makePlaneEntity(
             for: anchor,
             wallOpacity: arSession.wallOpacity,
-            floorOpacity: arSession.floorOpacity
+            floorOpacity: arSession.floorOpacity,
+            wallMaterial: wallMaterial
         ) else { return }
 
         sceneRoot.addChild(entity)
