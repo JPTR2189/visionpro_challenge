@@ -12,6 +12,10 @@ struct visionProApp: App {
 
     @State private var appModel = AppModel()
 
+    init() {
+        PortalRuneVisualSystem.registerRealityKitContent()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -29,6 +33,6 @@ struct visionProApp: App {
                     appModel.immersiveSpaceState = .closed
                 }
         }
-        .immersionStyle(selection: .constant(.full), in: .full)
+        .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }
