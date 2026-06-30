@@ -51,7 +51,7 @@ final class HandTrackingModel {
         guard wristJoint.isTracked else { return }
 
         let wristTransform = handAnchor.originFromAnchorTransform * wristJoint.anchorFromJointTransform
-        let palmNormal = -SIMD3<Float>(wristTransform.columns.2.x, wristTransform.columns.2.y, wristTransform.columns.2.z)
+        let palmNormal = -SIMD3<Float>(wristTransform.columns.1.x, wristTransform.columns.1.y, wristTransform.columns.1.z)
         let worldUp = SIMD3<Float>(0, 1, 0)
         let alignment = dot(normalize(palmNormal), worldUp)
 
