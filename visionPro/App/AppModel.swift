@@ -10,12 +10,12 @@ import SwiftUI
 /// Maintains app-wide state
 @MainActor
 @Observable
-class AppModel {
-    let immersiveSpaceID = "ImmersiveSpace"
+final class AppModel {
+    let immersiveSpaceID = "PortalImmersiveSpace"
+
     enum ImmersiveSpaceState {
-        case closed
-        case inTransition
-        case open
+        case closed, inTransition, open
     }
-    var immersiveSpaceState = ImmersiveSpaceState.closed
+    var immersiveSpaceState: ImmersiveSpaceState = .closed
 }
+

@@ -9,7 +9,6 @@ import SwiftUI
 
 @main
 struct visionProApp: App {
-
     @State private var appModel = AppModel()
 
     var body: some Scene {
@@ -17,18 +16,12 @@ struct visionProApp: App {
             ContentView()
                 .environment(appModel)
         }
-        .windowStyle(.volumetric)
 
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
             ImmersiveView()
                 .environment(appModel)
-                .onAppear {
-                    appModel.immersiveSpaceState = .open
-                }
-                .onDisappear {
-                    appModel.immersiveSpaceState = .closed
-                }
         }
-        .immersionStyle(selection: .constant(.full), in: .full)
+        .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }
+
