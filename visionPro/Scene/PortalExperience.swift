@@ -37,9 +37,10 @@ enum PortalExperience {
         let root = Entity()
         root.name = "PortalExperience"
 
-        let frontAnchor = AnchorEntity(.head)
-        frontAnchor.name = "PortalFrontAnchor"
-        frontAnchor.position = [0, -0.05, -1.75]
+        let frontAnchor = AnchorEntity(.world(transform: matrix_identity_float4x4))
+        frontAnchor.name = "PortalWorldAnchor"
+        frontAnchor.position = [0, 1.15, -1.45]
+        frontAnchor.scale = [0.72, 0.72, 0.72]
 
         addLighting(to: frontAnchor)
         addPortalPlaceholder(to: frontAnchor)

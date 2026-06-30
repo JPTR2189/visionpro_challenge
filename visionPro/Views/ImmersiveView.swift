@@ -23,8 +23,8 @@ struct ImmersiveView: View {
             PortalExperience.updateProgress(in: sceneRoot, selectedRuneIDs: selectedRuneIDs)
         }
         .gesture(
-            SpatialTapGesture()
-                .targetedToAnyEntity()
+            TapGesture()
+                .targetedToEntity(where: .has(PortalRuneComponent.self))
                 .onEnded { value in
                     handleSelection(from: value.entity)
                 }
