@@ -12,6 +12,7 @@ struct ToggleImmersiveSpaceButton: View {
     @Environment(AppModel.self) private var appModel
 
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
 
     var body: some View {
@@ -32,6 +33,7 @@ struct ToggleImmersiveSpaceButton: View {
                                 // Don't set immersiveSpaceState to .open because there
                                 // may be multiple paths to ImmersiveView.onAppear().
                                 // Only set .open in ImmersiveView.onAppear().
+                                dismissWindow(id: "MainWindow")
                                 break
 
                             case .userCancelled, .error:

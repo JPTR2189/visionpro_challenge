@@ -38,17 +38,20 @@ struct PortalRuneVisualSystem: System {
             case .normal:
                 targetScale = rune.baseScale
                 applyRuneMaterial(to: entity, red: rune.red, green: rune.green, blue: rune.blue, opacity: 0.88, roughness: 0.36)
+                applyRuneGlow(to: entity, opacity: 0.0, scale: 0.001)
             case .focused:
-                targetScale = rune.baseScale * (1.16 + pulse)
-                applyRuneMaterial(to: entity, red: 0.95, green: 0.98, blue: 1.0, opacity: 0.96, roughness: 0.16)
+                let glowPulse = 1.0 + sin(elapsed * 4.4) * 0.10
+                targetScale = rune.baseScale * (1.09 + pulse)
+                applyRuneMaterial(to: entity, red: rune.red, green: rune.green, blue: rune.blue, opacity: 1.0, roughness: 0.12)
+                applyRuneGlow(to: entity, opacity: 0.58, scale: 1.0 * glowPulse)
             case .selected:
-                targetScale = rune.baseScale * 1.09
-                applyRuneMaterial(to: entity, red: 0.42, green: 1.0, blue: 0.58, opacity: 0.96, roughness: 0.22)
+                targetScale = rune.baseScale
+                applyRuneMaterial(to: entity, red: rune.red, green: rune.green, blue: rune.blue, opacity: 0.88, roughness: 0.36)
+                applyRuneGlow(to: entity, opacity: 0.0, scale: 0.001)
             case .error:
-                let shake = sin(elapsed * 28) * 0.018
-                entity.position.x += shake
                 targetScale = rune.baseScale * 1.12
                 applyRuneMaterial(to: entity, red: 1.0, green: 0.12, blue: 0.10, opacity: 0.96, roughness: 0.2)
+                applyRuneGlow(to: entity, opacity: 0.28, scale: 0.82)
             }
 
             entity.scale = [targetScale, targetScale, targetScale]
@@ -69,5 +72,14 @@ struct PortalRuneVisualSystem: System {
         material.roughness = .init(floatLiteral: roughness)
         material.metallic = .init(floatLiteral: 0.0)
         modelEntity.model?.materials = [material]
+    }
+
+    private func applyRuneGlow(to entity: Entity, opacity: Double, scale: Float) {
+        guard let glow = entity.findEntity(named: "RuneGlow") as? ModelEntity else { return }
+
+        var material = UnlitMaterial()
+        material.color = .init(tint: .init(red: 1.0, green: 0.88, blue: 0.22, alpha: opacity))
+        glow.model?.materials = [material]
+        glow.scale = [scale, scale, scale]
     }
 }

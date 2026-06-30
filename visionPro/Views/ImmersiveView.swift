@@ -9,18 +9,36 @@ import SwiftUI
 import RealityKit
 
 struct ImmersiveView: View {
+    private static let sequenceLength = 6
+
+    @Environment(\.openWindow) private var openWindow
+
     @State private var sceneRoot: Entity?
+    @State private var targetRuneIDs = PortalExperience.makeRandomSequence(length: sequenceLength)
     @State private var selectedRuneIDs: [String] = []
     @State private var lastSelectionTime: Date = .distantPast
 
+    private var activeRuneID: String? {
+        guard selectedRuneIDs.count < targetRuneIDs.count else { return nil }
+        return targetRuneIDs[selectedRuneIDs.count]
+    }
+
     var body: some View {
         RealityView { content in
-            let root = PortalExperience.makeScene(selectedRuneIDs: selectedRuneIDs)
+            let root = PortalExperience.makeScene(
+                selectedRuneIDs: selectedRuneIDs,
+                activeRuneID: activeRuneID
+            )
             sceneRoot = root
             content.add(root)
         } update: { _ in
             guard let sceneRoot else { return }
             PortalExperience.updateProgress(in: sceneRoot, selectedRuneIDs: selectedRuneIDs)
+            PortalExperience.updateRuneStates(
+                in: sceneRoot,
+                selectedRuneIDs: selectedRuneIDs,
+                activeRuneID: activeRuneID
+            )
         }
         .gesture(
             TapGesture()
@@ -29,6 +47,9 @@ struct ImmersiveView: View {
                     handleSelection(from: value.entity)
                 }
         )
+        .onDisappear {
+            openWindow(id: "MainWindow")
+        }
     }
 
     private func handleSelection(from entity: Entity) {
@@ -41,10 +62,18 @@ struct ImmersiveView: View {
 
         lastSelectionTime = Date()
 
-        PortalExperience.resetTransientRuneStates(in: sceneRoot, selectedRuneIDs: selectedRuneIDs)
+        guard rune.id == activeRuneID else {
+            PortalExperience.setRuneState(in: sceneRoot, runeID: rune.id, state: .error)
+            return
+        }
+
         selectedRuneIDs.append(rune.id)
-        PortalExperience.setRuneState(in: sceneRoot, runeID: rune.id, state: .selected)
         PortalExperience.updateProgress(in: sceneRoot, selectedRuneIDs: selectedRuneIDs)
+        PortalExperience.updateRuneStates(
+            in: sceneRoot,
+            selectedRuneIDs: selectedRuneIDs,
+            activeRuneID: activeRuneID
+        )
     }
 }
 

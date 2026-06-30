@@ -33,7 +33,7 @@ enum PortalExperience {
         .init(id: "nox", symbol: "N", red: 0.30, green: 0.38, blue: 0.88)
     ]
 
-    static func makeScene(selectedRuneIDs: [String]) -> Entity {
+    static func makeScene(selectedRuneIDs: [String], activeRuneID: String?) -> Entity {
         let root = Entity()
         root.name = "PortalExperience"
 
@@ -46,33 +46,52 @@ enum PortalExperience {
         addPortalPlaceholder(to: frontAnchor)
         addRunes(to: frontAnchor)
         updateProgress(in: frontAnchor, selectedRuneIDs: selectedRuneIDs)
+        updateRuneStates(in: frontAnchor, selectedRuneIDs: selectedRuneIDs, activeRuneID: activeRuneID)
 
         root.addChild(frontAnchor)
         return root
     }
 
+    static func makeRandomSequence(length: Int) -> [String] {
+        guard length > 0 else { return [] }
+
+        var sequence: [String] = []
+        var previousID: String?
+
+        while sequence.count < length {
+            let candidates = runeDefinitions.map(\.id).filter { $0 != previousID }
+            guard let nextID = candidates.randomElement() else { break }
+
+            sequence.append(nextID)
+            previousID = nextID
+        }
+
+        return sequence
+    }
+
     static func updateProgress(in root: Entity, selectedRuneIDs: [String]) {
         root.findEntity(named: "PortalProgress")?.removeFromParent()
 
+        let container = root.findEntity(named: "PortalWorldAnchor") ?? root
         let progressRoot = Entity()
         progressRoot.name = "PortalProgress"
-        progressRoot.position = [0, -0.02, 0.05]
+        progressRoot.position = [0, -0.02, 0.26]
 
-        let spacing: Float = 0.12
-        let visibleIDs = Array(selectedRuneIDs.suffix(5))
+        let spacing: Float = 0.115
+        let visibleIDs = Array(selectedRuneIDs.suffix(6))
         let startX = -Float(max(visibleIDs.count - 1, 0)) * spacing / 2
 
         for (index, runeID) in visibleIDs.enumerated() {
             guard let definition = runeDefinitions.first(where: { $0.id == runeID }) else { continue }
 
-            let marker = makeRune(definition: definition, radius: 0.036, depth: 0.01)
+            let marker = makeCenterRune(definition: definition)
             marker.name = "ProgressRune-\(definition.id)"
             marker.position = [startX + Float(index) * spacing, 0, 0.02]
             marker.components.set(PortalProgressSlotComponent(index: index))
             progressRoot.addChild(marker)
         }
 
-        root.addChild(progressRoot)
+        container.addChild(progressRoot)
     }
 
     static func setRuneState(in root: Entity, runeID: String, state: PortalRuneVisualState) {
@@ -86,14 +105,19 @@ enum PortalExperience {
         rune.components.set(component)
     }
 
-    static func resetTransientRuneStates(in root: Entity, selectedRuneIDs: [String]) {
+    static func updateRuneStates(in root: Entity, selectedRuneIDs: [String], activeRuneID: String?) {
         for definition in runeDefinitions {
             guard let rune = root.findEntity(named: "Rune-\(definition.id)"),
                   var component = rune.components[PortalRuneComponent.self] else {
                 continue
             }
 
-            component.visualState = selectedRuneIDs.contains(definition.id) ? .selected : .normal
+            if definition.id == activeRuneID {
+                component.visualState = .focused
+            } else {
+                component.visualState = .normal
+            }
+
             component.stateStartedAt = CACurrentMediaTime()
             rune.components.set(component)
         }
@@ -194,8 +218,46 @@ enum PortalExperience {
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
         disc.name = "RuneDisc"
 
+        var glowMaterial = UnlitMaterial()
+        glowMaterial.color = .init(tint: .init(red: 1.0, green: 0.92, blue: 0.36, alpha: 0.0))
+
+        let glow = ModelEntity(
+            mesh: .generateCylinder(height: depth * 0.45, radius: radius * 1.95),
+            materials: [glowMaterial]
+        )
+        glow.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        glow.position = [0, 0, -depth * 0.35]
+        glow.name = "RuneGlow"
+
         let symbol = makeRuneSymbol(definition.symbol, radius: radius)
         symbol.position = [-radius * 0.30, -radius * 0.34, depth * 1.05]
+
+        runeRoot.addChild(glow)
+        runeRoot.addChild(disc)
+        runeRoot.addChild(symbol)
+        return runeRoot
+    }
+
+    private static func makeCenterRune(definition: RuneDefinition) -> Entity {
+        let runeRoot = Entity()
+        runeRoot.name = "CenterRune-\(definition.id)"
+
+        var discMaterial = UnlitMaterial()
+        discMaterial.color = .init(tint: .init(
+            red: definition.red,
+            green: definition.green,
+            blue: definition.blue,
+            alpha: 0.98
+        ))
+
+        let disc = ModelEntity(
+            mesh: .generateCylinder(height: 0.01, radius: 0.052),
+            materials: [discMaterial]
+        )
+        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+
+        let symbol = makeRuneSymbol(definition.symbol, radius: 0.064)
+        symbol.position = [-0.020, -0.026, 0.016]
 
         runeRoot.addChild(disc)
         runeRoot.addChild(symbol)
