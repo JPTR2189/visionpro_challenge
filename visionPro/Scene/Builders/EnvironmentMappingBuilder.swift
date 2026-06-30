@@ -7,97 +7,109 @@ enum EnvironmentMappingBuilder {
 
     // MARK: - API Pública
 
-    static func makePlaneEntity(
-        for anchor: PlaneAnchor,
-        wallOpacity: Float,
-        floorOpacity: Float,
-        wallMaterial: (any RealityKit.Material)? = nil,
-        debugMode: Bool = false
-    ) -> ModelEntity? {
-        if debugMode {
-            return makeDebugEntity(for: anchor)
+    static func makeRoomEntity(
+        from anchor: MeshAnchor,
+        wallMaterial: (any RealityKit.Material)?,
+        floorMaterial: (any RealityKit.Material)?,
+        floorOpacity: Float
+    ) async -> Entity? {
+        let geometry        = anchor.geometry
+        let allVertices     = geometry.vertexPositions()
+        let allIndices      = geometry.triangleIndices()
+        let classifications = geometry.faceClassifications()
+
+        let root = Entity()
+        root.name = anchor.id.uuidString
+        root.transform = Transform(matrix: anchor.originFromAnchorTransform)
+
+        if let wallEntity = await makeSubEntity(
+            vertices: allVertices,
+            indices: allIndices,
+            classifications: classifications,
+            condition: { $0 == .wall },
+            material: wallMaterial ?? fallbackWallMaterial()
+        ) {
+            root.addChild(wallEntity)
         }
 
-        switch anchor.classification {
-        case .wall:
-            return makeWallEntity(for: anchor, opacity: wallOpacity, customMaterial: wallMaterial)
-        case .floor:
-            return makeColoredEntity(for: anchor, color: .systemRed, opacity: floorOpacity, tag: FloorPlaneComponent())
-        default:
-            return nil
+        if let floorEntity = await makeSubEntity(
+            vertices: allVertices,
+            indices: allIndices,
+            classifications: classifications,
+            condition: { $0 == .floor },
+            material: floorMaterial ?? fallbackFloorMaterial(opacity: floorOpacity)
+        ) {
+            root.addChild(floorEntity)
         }
-    }
-
-    // MARK: - Debug: Todas as classificações visíveis com cores únicas
-
-    private static func makeDebugEntity(for anchor: PlaneAnchor) -> ModelEntity {
-        let color = debugColor(for: anchor.classification)
-        let entity = makeColoredEntity(for: anchor, color: color, opacity: 0.55, tag: WallPlaneComponent())
-        return entity
-    }
-
-    private static func debugColor(for classification: PlaneAnchor.Classification) -> UIColor {
-        switch classification {
-        case .wall:     return .systemBlue
-        case .floor:    return .systemRed
-        case .ceiling:  return .systemGreen
-        case .table:    return .systemYellow
-        case .seat:     return .systemOrange
-        case .window:   return .cyan
-        case .door:     return .systemPurple
-        default:        return .white
+        
+        if let occlusionEntity = await makeSubEntity(
+            vertices: allVertices,
+            indices: allIndices,
+            classifications: classifications,
+            condition: { $0 != .wall && $0 != .floor },
+            material: OcclusionMaterial()
+        ) {
+            root.addChild(occlusionEntity)
         }
+
+        return root.children.isEmpty ? nil : root
     }
 
-    // MARK: - Construção de Parede (com textura ou fallback)
+    // MARK: - Submesh por Classificação
 
-    private static func makeWallEntity(
-        for anchor: PlaneAnchor,
-        opacity: Float,
-        customMaterial: (any RealityKit.Material)?
-    ) -> ModelEntity {
-        let extent = anchor.geometry.extent
-        let mesh   = MeshResource.generatePlane(width: extent.width, depth: extent.height)
+    private static func makeSubEntity(
+        vertices: [SIMD3<Float>],
+        indices: [UInt32],
+        classifications: [MeshSurfaceClass],
+        condition: (MeshSurfaceClass) -> Bool,
+        material: any RealityKit.Material
+    ) async -> ModelEntity? {
+        var vertexMap   = [UInt32: UInt32]()
+        var newVertices = [SIMD3<Float>]()
+        var newIndices  = [UInt32]()
 
-        let material: any RealityKit.Material = customMaterial ?? fallbackWallMaterial(opacity: opacity)
+        for faceIndex in 0..<classifications.count {
+            guard condition(classifications[faceIndex]) else { continue }
 
+            let base = faceIndex * 3
+            for k in 0..<3 {
+                let oldIndex = indices[base + k]
+                if vertexMap[oldIndex] == nil {
+                    vertexMap[oldIndex] = UInt32(newVertices.count)
+                    newVertices.append(vertices[Int(oldIndex)])
+                }
+                newIndices.append(vertexMap[oldIndex]!)
+            }
+        }
+
+        guard !newVertices.isEmpty else { return nil }
+
+        var descriptor = MeshDescriptor()
+        descriptor.positions  = MeshBuffers.Positions(newVertices)
+        descriptor.primitives = .triangles(newIndices)
+
+        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
         let entity = ModelEntity(mesh: mesh, materials: [material])
-        entity.name      = anchor.id.uuidString
-        entity.transform = Transform(
-            matrix: anchor.originFromAnchorTransform * extent.anchorFromExtentTransform
-        )
-        entity.components.set(WallPlaneComponent())
+        
+        if let shape = try? await ShapeResource.generateStaticMesh(from: mesh) {
+            entity.components.set(CollisionComponent(shapes: [shape]))
+            entity.components.set(PhysicsBodyComponent(mode: .static))
+        }
+        
         return entity
     }
 
-    // MARK: - Construção de Plano Colorido (chão e debug)
+    // MARK: - Materiais
 
-    private static func makeColoredEntity<Tag: Component>(
-        for anchor: PlaneAnchor,
-        color: UIColor,
-        opacity: Float,
-        tag: Tag
-    ) -> ModelEntity {
-        let extent = anchor.geometry.extent
-        let mesh   = MeshResource.generatePlane(width: extent.width, depth: extent.height)
-
-        var material = UnlitMaterial()
-        material.color = .init(tint: color.withAlphaComponent(CGFloat(opacity)))
-
-        let entity = ModelEntity(mesh: mesh, materials: [material])
-        entity.name      = anchor.id.uuidString
-        entity.transform = Transform(
-            matrix: anchor.originFromAnchorTransform * extent.anchorFromExtentTransform
-        )
-        entity.components.set(tag)
-        return entity
+    private static func fallbackWallMaterial() -> any RealityKit.Material {
+        var mat = UnlitMaterial()
+        mat.color = .init(tint: UIColor.systemBlue.withAlphaComponent(0.5))
+        return mat
     }
 
-    // MARK: - Fallback
-
-    private static func fallbackWallMaterial(opacity: Float) -> any RealityKit.Material {
-        var material = UnlitMaterial()
-        material.color = .init(tint: UIColor.systemBlue.withAlphaComponent(CGFloat(opacity)))
-        return material
+    private static func fallbackFloorMaterial(opacity: Float) -> any RealityKit.Material {
+        var mat = UnlitMaterial()
+        mat.color = .init(tint: UIColor.systemRed.withAlphaComponent(CGFloat(opacity)))
+        return mat
     }
 }

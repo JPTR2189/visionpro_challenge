@@ -3,28 +3,19 @@ import SwiftUI
 struct ContentView: View {
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             Text("Runic Portals")
                 .font(.largeTitle)
                 .fontWeight(.semibold)
 
-            Divider()
-
-            Text("Portal Experience")
-                .font(.headline)
+            Text("Open the portal experience to begin mapping your environment.")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             TogglePortalSpaceButton()
-
-            Divider()
-
-            Text("Kayak Demo")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            ToggleImmersiveSpaceButton()
         }
-        .frame(width: 420)
+        .frame(width: 380)
         .padding(32)
     }
 }

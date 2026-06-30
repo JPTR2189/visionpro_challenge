@@ -10,45 +10,41 @@ final class ARKitSessionManager {
     enum MappingState {
         case idle
         case scanning
+        case ready
         case active
     }
 
     private(set) var mappingState: MappingState = .idle
-    private(set) var scannedAnchors: [UUID: PlaneAnchor] = [:]
-
-    var detectedSurfaceCount: Int { scannedAnchors.count }
-
-    // MARK: - Configuração de Opacidade e Debug
-
-    var wallOpacity:  Float = 0.4
-    var floorOpacity: Float = 0.4
-    var debugMode:    Bool  = false
-
-    // MARK: - Estado da Sessão
-
-    private(set) var isRunning           = false
     private(set) var authorizationDenied = false
+    private(set) var scannedMeshAnchors: [UUID: MeshAnchor] = [:]
+    
+    private(set) var currentRoomAnchor: RoomAnchor?
+    private(set) var canFinishScanning = false
 
-    // MARK: - Providers ARKit
+    // MARK: - Configuração
+
+    var floorOpacity: Float = 0.4
+
+    // MARK: - Providers
 
     private let session             = ARKitSession()
-    private let planeDetector       = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
+    private let roomTracking        = RoomTrackingProvider()
     private let sceneReconstruction = SceneReconstructionProvider()
 
     // MARK: - Streams
 
-    var planeUpdates: AnchorUpdateSequence<PlaneAnchor> {
-        planeDetector.anchorUpdates
+    var meshAnchorUpdates: AnchorUpdateSequence<MeshAnchor> {
+        sceneReconstruction.anchorUpdates
     }
 
-    var meshUpdates: AnchorUpdateSequence<MeshAnchor> {
-        sceneReconstruction.anchorUpdates
+    var roomAnchorUpdates: AnchorUpdateSequence<RoomAnchor> {
+        roomTracking.anchorUpdates
     }
 
     // MARK: - Ciclo de Vida
 
     func run() async {
-        guard PlaneDetectionProvider.isSupported,
+        guard RoomTrackingProvider.isSupported,
               SceneReconstructionProvider.isSupported else { return }
 
         let authResults = await session.requestAuthorization(for: [.worldSensing])
@@ -58,39 +54,45 @@ final class ARKitSessionManager {
         }
 
         do {
-            try await session.run([planeDetector, sceneReconstruction])
-            isRunning = true
+            try await session.run([roomTracking, sceneReconstruction])
             mappingState = .scanning
         } catch {
-            isRunning = false
+            mappingState = .idle
         }
     }
 
     func stop() {
         session.stop()
-        isRunning = false
         mappingState = .idle
     }
 
-    // MARK: - Controle de Mapeamento
+    // MARK: - Controle de Estado
+
+    func updateCurrentRoom(_ anchor: RoomAnchor) {
+        guard mappingState == .scanning else { return }
+        if anchor.isCurrentRoom {
+            currentRoomAnchor = anchor
+            canFinishScanning = true
+        }
+    }
+
+    func finishScanning() {
+        guard mappingState == .scanning && canFinishScanning else { return }
+        mappingState = .ready
+    }
 
     func reveal() {
-        guard mappingState == .scanning else { return }
+        guard mappingState == .ready else { return }
         mappingState = .active
     }
 
-    func resetScan() {
-        scannedAnchors.removeAll()
-        mappingState = .idle
+    // MARK: - Coleta de Mesh Anchors
+
+    func updateMeshAnchor(_ anchor: MeshAnchor) {
+        scannedMeshAnchors[anchor.id] = anchor
     }
 
-    // MARK: - Coleta de Anchors (chamado pela View durante scanning)
-
-    func collectAnchor(_ anchor: PlaneAnchor) {
-        scannedAnchors[anchor.id] = anchor
-    }
-
-    func discardAnchor(id: UUID) {
-        scannedAnchors.removeValue(forKey: id)
+    func removeMeshAnchor(id: UUID) {
+        scannedMeshAnchors.removeValue(forKey: id)
     }
 }

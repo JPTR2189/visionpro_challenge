@@ -10,6 +10,12 @@ enum TextureMaterialLoader {
         }
         return extractFirstMaterial(from: entity)
     }
+    static func loadFloorMaterial() async -> (any RealityKit.Material)? {
+        guard let entity = try? await Entity(named: "grassTexture", in: realityKitContentBundle) else {
+            return nil
+        }
+        return extractFirstMaterial(from: entity)
+    }
 
     private static func extractFirstMaterial(from entity: Entity) -> (any RealityKit.Material)? {
         if let model = entity as? ModelEntity,

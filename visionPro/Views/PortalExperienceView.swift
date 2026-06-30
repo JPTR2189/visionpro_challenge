@@ -7,69 +7,85 @@ struct PortalExperienceView: View {
     @State private var arSession  = ARKitSessionManager()
     @State private var sceneRoot  = Entity()
     @State private var wallMaterial: (any RealityKit.Material)?
+    @State private var floorMaterial: (any RealityKit.Material)?
+    @State private var meshEntities = [UUID: Entity]()
 
     var body: some View {
         RealityView { content in
             content.add(sceneRoot)
         }
-        .task {
-            wallMaterial = await TextureMaterialLoader.loadWallMaterial()
-        }
-        .task {
-            await arSession.run()
-        }
-        .task {
-            await collectPlaneUpdates()
-        }
-        .overlay(alignment: .bottom) {
-            mappingOverlay
+        .task { wallMaterial = await TextureMaterialLoader.loadWallMaterial() }
+        .task { floorMaterial = await TextureMaterialLoader.loadFloorMaterial() }
+        .task { await arSession.run() }
+        .task { await processRoomUpdates() }
+        .task { await processMeshUpdates() }
+        .overlay(alignment: .bottom) { mappingOverlay }
+    }
+
+    // MARK: - Room Tracking: aguarda cômodo completo
+
+    @MainActor
+    private func processRoomUpdates() async {
+        for await update in arSession.roomAnchorUpdates {
+            arSession.updateCurrentRoom(update.anchor)
         }
     }
 
-    // MARK: - Coleta Silenciosa de Anchors
+    // MARK: - Mesh Tracking: coleta silenciosa + instância após reveal
 
     @MainActor
-    private func collectPlaneUpdates() async {
-        for await update in arSession.planeUpdates {
+    private func processMeshUpdates() async {
+        for await update in arSession.meshAnchorUpdates {
             switch update.event {
             case .added, .updated:
-                arSession.collectAnchor(update.anchor)
+                arSession.updateMeshAnchor(update.anchor)
                 if arSession.mappingState == .active {
-                    replacePlaneEntity(for: update.anchor)
+                    let validIDs = arSession.currentRoomAnchor?.meshAnchorIDs ?? []
+                    if validIDs.isEmpty || validIDs.contains(update.anchor.id) {
+                        await refreshMeshEntity(for: update.anchor)
+                    } else {
+                        meshEntities[update.anchor.id]?.removeFromParent()
+                        meshEntities.removeValue(forKey: update.anchor.id)
+                    }
                 }
             case .removed:
-                arSession.discardAnchor(id: update.anchor.id)
-                sceneRoot.findEntity(named: update.anchor.id.uuidString)?.removeFromParent()
+                arSession.removeMeshAnchor(id: update.anchor.id)
+                meshEntities[update.anchor.id]?.removeFromParent()
+                meshEntities.removeValue(forKey: update.anchor.id)
             }
         }
     }
 
-    // MARK: - Reveal: instancia tudo de uma vez
+    // MARK: - Reveal: instância todos os anchors coletados de uma vez
 
     @MainActor
-    private func revealEnvironment() {
+    private func revealEnvironment() async {
         arSession.reveal()
-        for anchor in arSession.scannedAnchors.values {
-            replacePlaneEntity(for: anchor)
+        
+        let validIDs = arSession.currentRoomAnchor?.meshAnchorIDs ?? []
+        for anchor in arSession.scannedMeshAnchors.values {
+            if validIDs.isEmpty || validIDs.contains(anchor.id) {
+                await refreshMeshEntity(for: anchor)
+            }
         }
     }
 
     @MainActor
-    private func replacePlaneEntity(for anchor: PlaneAnchor) {
-        sceneRoot.findEntity(named: anchor.id.uuidString)?.removeFromParent()
+    private func refreshMeshEntity(for anchor: MeshAnchor) async {
+        meshEntities[anchor.id]?.removeFromParent()
 
-        guard let entity = EnvironmentMappingBuilder.makePlaneEntity(
-            for: anchor,
-            wallOpacity: arSession.wallOpacity,
-            floorOpacity: arSession.floorOpacity,
-            wallMaterial: arSession.debugMode ? nil : wallMaterial,
-            debugMode: arSession.debugMode
+        guard let entity = await EnvironmentMappingBuilder.makeRoomEntity(
+            from: anchor,
+            wallMaterial: wallMaterial,
+            floorMaterial: floorMaterial,
+            floorOpacity: arSession.floorOpacity
         ) else { return }
 
         sceneRoot.addChild(entity)
+        meshEntities[anchor.id] = entity
     }
 
-    // MARK: - UI de Mapeamento
+    // MARK: - UI
 
     @ViewBuilder
     private var mappingOverlay: some View {
@@ -78,10 +94,10 @@ struct PortalExperienceView: View {
             EmptyView()
         case .scanning:
             scanningPanel
+        case .ready:
+            readyPanel
         case .active:
-            if arSession.debugMode {
-                debugControls
-            }
+            EmptyView()
         }
     }
 
@@ -90,84 +106,68 @@ struct PortalExperienceView: View {
             ScanningIndicator()
 
             VStack(spacing: 6) {
-                Text("Scanning Environment")
+                Text("Scanning your room...")
                     .font(.headline)
                     .fontWeight(.semibold)
 
-                Text("\(arSession.detectedSurfaceCount) surfaces detected")
+                Text("Move your head slowly to scan walls and floor")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-                    .animation(.default, value: arSession.detectedSurfaceCount)
+                    .multilineTextAlignment(.center)
             }
 
-            Button {
-                revealEnvironment()
-            } label: {
-                Label("Reveal!", systemImage: "sparkles")
-                    .fontWeight(.semibold)
-                    .frame(minWidth: 160)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.indigo)
-            .disabled(arSession.detectedSurfaceCount == 0)
-
-            if arSession.authorizationDenied {
+            if arSession.canFinishScanning {
+                Button("Finish Scanning") {
+                    arSession.finishScanning()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+            } else if arSession.authorizationDenied {
                 Text("Permission denied — enable in Settings")
                     .font(.caption)
                     .foregroundStyle(.red)
             }
         }
+        .frame(maxWidth: 320)
         .padding(28)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
         .padding(.bottom, 40)
     }
 
-    private var debugControls: some View {
-        VStack(spacing: 8) {
-            debugLegend
+    private var readyPanel: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 42))
+                .foregroundStyle(.green)
+                .symbolEffect(.bounce, options: .nonRepeating)
 
-            Toggle("Debug Mode", isOn: Binding(
-                get: { arSession.debugMode },
-                set: { newValue in
-                    arSession.debugMode = newValue
-                    sceneRoot.children.forEach { $0.removeFromParent() }
-                    for anchor in arSession.scannedAnchors.values {
-                        replacePlaneEntity(for: anchor)
-                    }
+            VStack(spacing: 6) {
+                Text("Room mapped!")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+
+                Text("Your environment is ready. Apply textures when you're set.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
+                Task {
+                    await revealEnvironment()
                 }
-            ))
-            .toggleStyle(.button)
-            .tint(.orange)
-            .padding(12)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            } label: {
+                Label("Apply Textures", systemImage: "sparkles")
+                    .fontWeight(.semibold)
+                    .frame(minWidth: 180)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.indigo)
         }
-        .padding(.bottom, 32)
-    }
-
-    private var debugLegend: some View {
-        HStack(spacing: 10) {
-            legendItem(color: .blue,   label: "Wall")
-            legendItem(color: .red,    label: "Floor")
-            legendItem(color: .green,  label: "Ceiling")
-            legendItem(color: .yellow, label: "Table")
-            legendItem(color: .orange, label: "Seat")
-            legendItem(color: .cyan,   label: "Window")
-            legendItem(color: .purple, label: "Door")
-            legendItem(color: .white,  label: "Unknown")
-        }
-        .font(.caption2)
-        .padding(10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private func legendItem(color: Color, label: String) -> some View {
-        HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color)
-                .frame(width: 14, height: 14)
-            Text(label)
-        }
+        .frame(maxWidth: 320)
+        .padding(28)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .padding(.bottom, 40)
     }
 }
 

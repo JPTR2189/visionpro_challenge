@@ -3,8 +3,7 @@ import SwiftUI
 @MainActor
 @Observable
 class AppModel {
-    let immersiveSpaceID = "ImmersiveSpace"
-    let portalSpaceID    = "PortalExperienceSpace"
+    let portalSpaceID = "PortalExperienceSpace"
 
     enum ImmersiveSpaceState {
         case closed
@@ -12,6 +11,5 @@ class AppModel {
         case open
     }
 
-    var immersiveSpaceState: ImmersiveSpaceState = .closed
-    var portalSpaceState:    ImmersiveSpaceState = .closed
+    var portalSpaceState: ImmersiveSpaceState = .closed
 }
