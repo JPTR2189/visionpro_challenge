@@ -12,7 +12,7 @@ enum EnvironmentMappingBuilder {
         wallMaterial: (any RealityKit.Material)?,
         floorMaterial: (any RealityKit.Material)?,
         floorOpacity: Float
-    ) async -> Entity? {
+    ) -> Entity? {
         let geometry        = anchor.geometry
         let allVertices     = geometry.vertexPositions()
         let allIndices      = geometry.triangleIndices()
@@ -22,7 +22,7 @@ enum EnvironmentMappingBuilder {
         root.name = anchor.id.uuidString
         root.transform = Transform(matrix: anchor.originFromAnchorTransform)
 
-        if let wallEntity = await makeSubEntity(
+        if let wallEntity = makeSubEntity(
             vertices: allVertices,
             indices: allIndices,
             classifications: classifications,
@@ -32,7 +32,7 @@ enum EnvironmentMappingBuilder {
             root.addChild(wallEntity)
         }
 
-        if let floorEntity = await makeSubEntity(
+        if let floorEntity = makeSubEntity(
             vertices: allVertices,
             indices: allIndices,
             classifications: classifications,
@@ -42,7 +42,7 @@ enum EnvironmentMappingBuilder {
             root.addChild(floorEntity)
         }
         
-        if let occlusionEntity = await makeSubEntity(
+        if let occlusionEntity = makeSubEntity(
             vertices: allVertices,
             indices: allIndices,
             classifications: classifications,
@@ -63,7 +63,7 @@ enum EnvironmentMappingBuilder {
         classifications: [MeshSurfaceClass],
         condition: (MeshSurfaceClass) -> Bool,
         material: any RealityKit.Material
-    ) async -> ModelEntity? {
+    ) -> ModelEntity? {
         var vertexMap   = [UInt32: UInt32]()
         var newVertices = [SIMD3<Float>]()
         var newIndices  = [UInt32]()
@@ -89,14 +89,7 @@ enum EnvironmentMappingBuilder {
         descriptor.primitives = .triangles(newIndices)
 
         guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
-        let entity = ModelEntity(mesh: mesh, materials: [material])
-        
-        if let shape = try? await ShapeResource.generateStaticMesh(from: mesh) {
-            entity.components.set(CollisionComponent(shapes: [shape]))
-            entity.components.set(PhysicsBodyComponent(mode: .static))
-        }
-        
-        return entity
+        return ModelEntity(mesh: mesh, materials: [material])
     }
 
     // MARK: - Materiais

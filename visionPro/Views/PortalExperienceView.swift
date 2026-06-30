@@ -11,15 +11,23 @@ struct PortalExperienceView: View {
     @State private var meshEntities = [UUID: Entity]()
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             content.add(sceneRoot)
+            if let uiEntity = attachments.entity(for: "MappingUI") {
+                // Posiciona a 1.2m de altura, 1m à frente do usuário
+                uiEntity.position = [0, 1.2, -1.0]
+                sceneRoot.addChild(uiEntity)
+            }
+        } attachments: {
+            Attachment(id: "MappingUI") {
+                mappingOverlay
+            }
         }
         .task { wallMaterial = await TextureMaterialLoader.loadWallMaterial() }
         .task { floorMaterial = await TextureMaterialLoader.loadFloorMaterial() }
         .task { await arSession.run() }
         .task { await processRoomUpdates() }
         .task { await processMeshUpdates() }
-        .overlay(alignment: .bottom) { mappingOverlay }
     }
 
     // MARK: - Room Tracking: aguarda cômodo completo
@@ -39,15 +47,7 @@ struct PortalExperienceView: View {
             switch update.event {
             case .added, .updated:
                 arSession.updateMeshAnchor(update.anchor)
-                if arSession.mappingState == .active {
-                    let validIDs = arSession.currentRoomAnchor?.meshAnchorIDs ?? []
-                    if validIDs.isEmpty || validIDs.contains(update.anchor.id) {
-                        await refreshMeshEntity(for: update.anchor)
-                    } else {
-                        meshEntities[update.anchor.id]?.removeFromParent()
-                        meshEntities.removeValue(forKey: update.anchor.id)
-                    }
-                }
+                refreshMeshEntity(for: update.anchor)
             case .removed:
                 arSession.removeMeshAnchor(id: update.anchor.id)
                 meshEntities[update.anchor.id]?.removeFromParent()
@@ -59,30 +59,37 @@ struct PortalExperienceView: View {
     // MARK: - Reveal: instância todos os anchors coletados de uma vez
 
     @MainActor
-    private func revealEnvironment() async {
+    private func revealEnvironment() {
         arSession.reveal()
         
-        let validIDs = arSession.currentRoomAnchor?.meshAnchorIDs ?? []
         for anchor in arSession.scannedMeshAnchors.values {
-            if validIDs.isEmpty || validIDs.contains(anchor.id) {
-                await refreshMeshEntity(for: anchor)
-            }
+            refreshMeshEntity(for: anchor)
         }
     }
 
     @MainActor
-    private func refreshMeshEntity(for anchor: MeshAnchor) async {
+    private func refreshMeshEntity(for anchor: MeshAnchor) {
         meshEntities[anchor.id]?.removeFromParent()
+        
+        let isFinal = (arSession.mappingState == .active)
+        let wMat = isFinal ? wallMaterial : scanningMaterial
+        let fMat = isFinal ? floorMaterial : scanningMaterial
 
-        guard let entity = await EnvironmentMappingBuilder.makeRoomEntity(
+        guard let entity = EnvironmentMappingBuilder.makeRoomEntity(
             from: anchor,
-            wallMaterial: wallMaterial,
-            floorMaterial: floorMaterial,
+            wallMaterial: wMat,
+            floorMaterial: fMat,
             floorOpacity: arSession.floorOpacity
         ) else { return }
 
         sceneRoot.addChild(entity)
         meshEntities[anchor.id] = entity
+    }
+    
+    private var scanningMaterial: any RealityKit.Material {
+        var mat = UnlitMaterial()
+        mat.color = .init(tint: UIColor.systemCyan.withAlphaComponent(0.25))
+        return mat
     }
 
     // MARK: - UI
@@ -153,9 +160,7 @@ struct PortalExperienceView: View {
             }
 
             Button {
-                Task {
-                    await revealEnvironment()
-                }
+                revealEnvironment()
             } label: {
                 Label("Apply Textures", systemImage: "sparkles")
                     .fontWeight(.semibold)
