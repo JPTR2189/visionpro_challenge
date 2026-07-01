@@ -5,6 +5,12 @@ import UIKit
 @MainActor
 enum EnvironmentMappingBuilder {
 
+    enum Projection {
+        case horizontal
+        case vertical
+        case none
+    }
+
     // MARK: - API Pública
 
     static func makeRoomEntity(
@@ -27,7 +33,8 @@ enum EnvironmentMappingBuilder {
             indices: allIndices,
             classifications: classifications,
             condition: { $0 == .wall },
-            material: wallMaterial ?? fallbackWallMaterial()
+            material: wallMaterial ?? fallbackWallMaterial(),
+            projection: .vertical
         ) {
             root.addChild(wallEntity)
         }
@@ -37,20 +44,12 @@ enum EnvironmentMappingBuilder {
             indices: allIndices,
             classifications: classifications,
             condition: { $0 == .floor },
-            material: floorMaterial ?? fallbackFloorMaterial(opacity: floorOpacity)
+            material: floorMaterial ?? fallbackFloorMaterial(opacity: floorOpacity),
+            projection: .horizontal
         ) {
             root.addChild(floorEntity)
         }
         
-        if let occlusionEntity = makeSubEntity(
-            vertices: allVertices,
-            indices: allIndices,
-            classifications: classifications,
-            condition: { $0 != .wall && $0 != .floor },
-            material: OcclusionMaterial()
-        ) {
-            root.addChild(occlusionEntity)
-        }
 
         return root.children.isEmpty ? nil : root
     }
@@ -62,10 +61,12 @@ enum EnvironmentMappingBuilder {
         indices: [UInt32],
         classifications: [MeshSurfaceClass],
         condition: (MeshSurfaceClass) -> Bool,
-        material: any RealityKit.Material
+        material: any RealityKit.Material,
+        projection: Projection
     ) -> ModelEntity? {
         var vertexMap   = [UInt32: UInt32]()
         var newVertices = [SIMD3<Float>]()
+        var newUVs      = [SIMD2<Float>]()
         var newIndices  = [UInt32]()
 
         for faceIndex in 0..<classifications.count {
@@ -76,7 +77,17 @@ enum EnvironmentMappingBuilder {
                 let oldIndex = indices[base + k]
                 if vertexMap[oldIndex] == nil {
                     vertexMap[oldIndex] = UInt32(newVertices.count)
-                    newVertices.append(vertices[Int(oldIndex)])
+                    let v = vertices[Int(oldIndex)]
+                    newVertices.append(v)
+                    
+                    switch projection {
+                    case .horizontal:
+                        newUVs.append(SIMD2<Float>(v.x, v.z))
+                    case .vertical:
+                        newUVs.append(SIMD2<Float>(v.x, v.y))
+                    case .none:
+                        newUVs.append(.zero)
+                    }
                 }
                 newIndices.append(vertexMap[oldIndex]!)
             }
@@ -87,6 +98,7 @@ enum EnvironmentMappingBuilder {
         var descriptor = MeshDescriptor()
         descriptor.positions  = MeshBuffers.Positions(newVertices)
         descriptor.primitives = .triangles(newIndices)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(newUVs)
 
         guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
         return ModelEntity(mesh: mesh, materials: [material])

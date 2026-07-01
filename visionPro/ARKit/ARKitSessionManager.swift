@@ -29,7 +29,7 @@ final class ARKitSessionManager {
 
     private let session             = ARKitSession()
     private let roomTracking        = RoomTrackingProvider()
-    private let sceneReconstruction = SceneReconstructionProvider()
+    private let sceneReconstruction = SceneReconstructionProvider(modes: [.classification])
 
     // MARK: - Streams
 

@@ -18,7 +18,7 @@ extension MeshAnchor.Geometry {
         let src = vertices
         let ptr = src.buffer.contents().advanced(by: src.offset)
         return (0..<src.count).map { i in
-            ptr.advanced(by: i * src.stride).load(as: SIMD3<Float>.self)
+            ptr.loadUnaligned(fromByteOffset: i * src.stride, as: SIMD3<Float>.self)
         }
     }
 
@@ -28,11 +28,11 @@ extension MeshAnchor.Geometry {
         let total = elem.count * 3
         if elem.bytesPerIndex == 2 {
             return (0..<total).map { i in
-                UInt32(ptr.advanced(by: i * 2).load(as: UInt16.self))
+                UInt32(ptr.loadUnaligned(fromByteOffset: i * 2, as: UInt16.self))
             }
         } else {
             return (0..<total).map { i in
-                ptr.advanced(by: i * 4).load(as: UInt32.self)
+                ptr.loadUnaligned(fromByteOffset: i * 4, as: UInt32.self)
             }
         }
     }
@@ -41,7 +41,7 @@ extension MeshAnchor.Geometry {
         guard let src = classifications else { return [] }
         let ptr = src.buffer.contents().advanced(by: src.offset)
         return (0..<faces.count).map { i in
-            let raw = ptr.advanced(by: i * src.stride).load(as: UInt8.self)
+            let raw = ptr.loadUnaligned(fromByteOffset: i * src.stride, as: UInt8.self)
             return MeshSurfaceClass(rawValue: raw) ?? .none
         }
     }

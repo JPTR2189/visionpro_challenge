@@ -8,21 +8,24 @@ struct PortalExperienceView: View {
     @State private var sceneRoot  = Entity()
     @State private var wallMaterial: (any RealityKit.Material)?
     @State private var floorMaterial: (any RealityKit.Material)?
+    @State private var scanningMaterial: (any RealityKit.Material)?
     @State private var meshEntities = [UUID: Entity]()
 
     var body: some View {
         RealityView { content, attachments in
             content.add(sceneRoot)
             if let uiEntity = attachments.entity(for: "MappingUI") {
-                // Posiciona a 1.2m de altura, 1m à frente do usuário
-                uiEntity.position = [0, 1.2, -1.0]
-                sceneRoot.addChild(uiEntity)
+                // Ancorado ao content (espaço imersivo) e não ao sceneRoot
+                // para que apareça à frente do usuário no momento de entrada
+                uiEntity.position = [0, 1.6, -1.0]
+                content.add(uiEntity)
             }
         } attachments: {
             Attachment(id: "MappingUI") {
                 mappingOverlay
             }
         }
+        .task { scanningMaterial = TextureMaterialLoader.createScanningMaterial() }
         .task { wallMaterial = await TextureMaterialLoader.loadWallMaterial() }
         .task { floorMaterial = await TextureMaterialLoader.loadFloorMaterial() }
         .task { await arSession.run() }
@@ -47,7 +50,11 @@ struct PortalExperienceView: View {
             switch update.event {
             case .added, .updated:
                 arSession.updateMeshAnchor(update.anchor)
-                refreshMeshEntity(for: update.anchor)
+                // Só (re)cria a entidade se ainda não aplicamos as texturas finais,
+                // evitando sobrescrever o material definitivo com o de escaneamento.
+                if arSession.mappingState != .active {
+                    refreshMeshEntity(for: update.anchor)
+                }
             case .removed:
                 arSession.removeMeshAnchor(id: update.anchor.id)
                 meshEntities[update.anchor.id]?.removeFromParent()
@@ -84,12 +91,6 @@ struct PortalExperienceView: View {
 
         sceneRoot.addChild(entity)
         meshEntities[anchor.id] = entity
-    }
-    
-    private var scanningMaterial: any RealityKit.Material {
-        var mat = UnlitMaterial()
-        mat.color = .init(tint: UIColor.systemCyan.withAlphaComponent(0.25))
-        return mat
     }
 
     // MARK: - UI
