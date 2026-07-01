@@ -15,13 +15,25 @@ struct HandSphereView: View {
     @State private var leftSphereEntity: Entity?
     @State private var debugSphereEntity: Entity?
 
+    /// Controle o áudio das bolas de fogo
+    @State private var rightAudioController: AudioPlaybackController?
+    @State private var leftAudioController: AudioPlaybackController?
+    @State private var debugAudioController: AudioPlaybackController?
+
+    ///  Tamanho da bola de fogo
+    private let targetScale: Float = 0.15
+
+    /// Elevação da bola de fogo na mão
+    private let palmOffset: SIMD3<Float> = [0, 0.1, 0]
+
     var body: some View {
         RealityView { content in
-            // Mão direita
+            
+            /// Mão direita
             if let rightFireBall = try? await Entity(named: "FireBall", in: realityKitContentBundle) {
                 let rightAnchor = AnchorEntity(.hand(.right, location: .palm))
                 rightFireBall.scale = [0.001, 0.001, 0.001]
-                rightFireBall.position = [0, 0.05, 0]
+                rightFireBall.position = palmOffset
                 rightAnchor.addChild(rightFireBall)
                 content.add(rightAnchor)
                 rightSphereEntity = rightFireBall
@@ -29,11 +41,11 @@ struct HandSphereView: View {
                 print("Não consegui carregar a cena 'FireBall' (mão direita).")
             }
 
-            // Mão esquerda
+            /// Mão esquerda
             if let leftFireBall = try? await Entity(named: "FireBall", in: realityKitContentBundle) {
                 let leftAnchor = AnchorEntity(.hand(.left, location: .palm))
                 leftFireBall.scale = [0.001, 0.001, 0.001]
-                leftFireBall.position = [0, 0.05, 0]
+                leftFireBall.position = palmOffset
                 leftAnchor.addChild(leftFireBall)
                 content.add(leftAnchor)
                 leftSphereEntity = leftFireBall
@@ -41,7 +53,7 @@ struct HandSphereView: View {
                 print("Não consegui carregar a cena 'FireBall' (mão esquerda).")
             }
 
-            // 🧪 Debug — ancorada em ponto fixo do mundo, sem depender da mão
+            // Usado para gerar a bola de fogo fixa [DEBUG]
             if let debugFireBall = try? await Entity(named: "FireBall", in: realityKitContentBundle) {
                 let worldAnchor = AnchorEntity(world: [0, 1.2, -0.5])
                 debugFireBall.scale = [0.001, 0.001, 0.001]
@@ -54,15 +66,30 @@ struct HandSphereView: View {
         }
         .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in
             animate(rightSphereEntity, show: shouldAppear)
-            if shouldAppear { playFireAudio(on: rightSphereEntity) }
+            if shouldAppear {
+                rightAudioController = playFireAudio(on: rightSphereEntity)
+            } else {
+                rightAudioController?.stop()
+                rightAudioController = nil
+            }
         }
         .onChange(of: handModel.leftSphereShouldAppear) { _, shouldAppear in
             animate(leftSphereEntity, show: shouldAppear)
-            if shouldAppear { playFireAudio(on: leftSphereEntity) }
+            if shouldAppear {
+                leftAudioController = playFireAudio(on: leftSphereEntity)
+            } else {
+                leftAudioController?.stop()
+                leftAudioController = nil
+            }
         }
         .onChange(of: appModel.debugForceShow) { _, shouldAppear in
             animate(debugSphereEntity, show: shouldAppear)
-            if shouldAppear { playFireAudio(on: debugSphereEntity) }
+            if shouldAppear {
+                debugAudioController = playFireAudio(on: debugSphereEntity)
+            } else {
+                debugAudioController?.stop()
+                debugAudioController = nil
+            }
         }
         .task {
             await handModel.start()
@@ -72,26 +99,27 @@ struct HandSphereView: View {
     private func animate(_ entity: Entity?, show: Bool) {
         guard let entity else { return }
 
-        let targetScale: Float = show ? 1.0 : 0.001
+        let scale = show ? targetScale : Float(0.001)
         entity.move(
-            to: Transform(scale: [targetScale, targetScale, targetScale]),
+            to: Transform(scale: [scale, scale, scale], translation: palmOffset),
             relativeTo: entity.parent,
             duration: 0.3,
             timingFunction: .easeInOut
         )
     }
 
-    /// Carrega o áudio "fireSound" diretamente da cena "FireBall.usda"
-    private func playFireAudio(on rootEntity: Entity?) {
-        guard let rootEntity else { return }
+    /// Toca o áudio da FireBall e retorna o AudioPlaybackController,
+    /// que permite parar o som depois quando necessário.
+    @discardableResult
+    private func playFireAudio(on rootEntity: Entity?) -> AudioPlaybackController? {
+        guard let rootEntity else { return nil }
 
         guard let sphereEntity = rootEntity.findEntity(named: "Sphere") else {
-            print("Não foi encotrado a entidade 'Sphere' dentro do FireBall.")
-            return
+            print("Não encontrei a entidade 'Sphere' dentro do FireBall.")
+            return nil
         }
 
         Task {
-            /// Caminhos possíveis para o acessar o áudio:
             let attempts = [
                 "/Root/Sphere/FireSpatialAudio/fireSound",
                 "/Root/FireSpatialAudio/fireSound",
@@ -109,13 +137,13 @@ struct HandSphereView: View {
                     print("✅ Carregou o áudio usando o caminho:", path)
                     sphereEntity.playAudio(resource)
                     return
-                } else {
-                    print("❌ Falhou com o caminho:", path)
                 }
             }
 
-            print("Nenhum caminho funcionou. Pode ser necessário ajustar o nome exato da cena/entidade.")
+            print("⚠️ Áudio não encontrado — continuando sem som.")
         }
+
+        return nil
     }
 }
 

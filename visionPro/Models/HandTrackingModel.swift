@@ -20,7 +20,7 @@ final class HandTrackingModel {
     var leftSphereShouldAppear = false
     private var leftConsecutiveFramesUp = 0
 
-    /// Limite de frames seguidos com rúido que podem ser tolerados ( antes de zerar a contagem)
+    /// Limite de frames seguidos com ruído que podem ser tolerados
     private let toleratedBadFrames = 5
     /// Quantidade de frames corretos para exibir a esfera
     private let framesToConfirm = 10
@@ -51,11 +51,22 @@ final class HandTrackingModel {
         guard wristJoint.isTracked else { return }
 
         let wristTransform = handAnchor.originFromAnchorTransform * wristJoint.anchorFromJointTransform
-        let palmNormal = -SIMD3<Float>(wristTransform.columns.1.x, wristTransform.columns.1.y, wristTransform.columns.1.z)
-        let worldUp = SIMD3<Float>(0, 1, 0)
-        let alignment = dot(normalize(palmNormal), worldUp)
 
-        let isUp = alignment > 0.75
+        // 🔧 Bug 3 corrigido: o sistema de coordenadas do punho é ESPELHADO
+        // entre mão direita e esquerda no ARKit.
+        // Direita: precisamos inverter o sinal (-) pra "palma pra cima" bater com worldUp
+        // Esquerda: o sinal original (+) já funciona corretamente
+        let sign: Float = handAnchor.chirality == .right ? -1 : 1
+        let palmNormal = sign * SIMD3<Float>(
+            wristTransform.columns.1.x,
+            wristTransform.columns.1.y,
+            wristTransform.columns.1.z
+        )
+
+        let worldUp = SIMD3<Float>(0, 1, 0) /// Mão apontada para cima no mundo real
+        let alignment = dot(normalize(palmNormal), worldUp) /// Compara com a prova real
+
+        let isUp = alignment > 0.75 /// Resultado "cru" desse frame específico
 
         await MainActor.run {
             switch handAnchor.chirality {
