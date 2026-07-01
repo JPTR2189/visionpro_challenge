@@ -22,7 +22,7 @@ struct ContentView: View {
 
             ToggleImmersiveSpaceButton()
 
-            // Botão de DEBUB
+            // Botão de DEBUG
             Button("🧪 Forçar esfera aparecer (debug)") {
                 appModel.debugForceShow.toggle()
             }

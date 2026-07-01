@@ -17,7 +17,6 @@ class AppModel {
     }
     var immersiveSpaceState = ImmersiveSpaceState.closed
 
-    // 🧪 Temporário, só para testar a animação da esfera sem depender da mão.
-    // Remover esta propriedade quando o app estiver validado por completo.
+    // Para testar a animação [DEBUG]
     var debugForceShow = false
 }
