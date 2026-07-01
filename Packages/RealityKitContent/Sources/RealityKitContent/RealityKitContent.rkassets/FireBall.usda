@@ -29,39 +29,6 @@ def Xform "Root"
         }
     }
 
-    def Xform "Fire"
-    {
-        def RealityKitComponent "VFXEmitter"
-        {
-            token info:id = "RealityKit.VFXEmitter"
-
-            def RealityKitStruct "currentState"
-            {
-                token birthDirection = "Local"
-                token birthLocation = "Volume"
-                double emissionDuration = 0
-                token emitterShape = "Plane"
-                bool isLocal = 1
-                bool isLocalFields = 0
-                float particleSpeed = 1
-
-                def RealityKitStruct "mainEmitter"
-                {
-                    float4 endColorA = (1, 0.008742433, 0, 1)
-                    double particleLifeSpan = 1
-                    float particleSize = 0.04
-                    float sizeMultiplierAtEndOfLifespan = 0
-                    bool useEndColor = 1
-                    bool useEndColorRange = 0
-                }
-
-                def RealityKitStruct "spawnedEmitter"
-                {
-                }
-            }
-        }
-    }
-
     def "Sphere" (
         active = true
         prepend apiSchemas = ["MaterialBindingAPI"]
@@ -76,7 +43,7 @@ def Xform "Root"
             bindMaterialAs = "weakerThanDescendants"
         )
         quatf xformOp:orient = (1, -3.8941437e-7, -1.5099585e-7, 8.742272e-8)
-        float3 xformOp:scale = (0.001, 0.001, 0.001)
+        float3 xformOp:scale = (0.01, 0.01, 0.01)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
         def Xform "FireSpatialAudio" (
@@ -121,6 +88,47 @@ def Xform "Root"
             float gain = 0
             uniform token info:id = "RealityKit.SpatialAudio"
             float rolloffFactor = 5
+        }
+    }
+
+    def Xform "Fire"
+    {
+        float3 xformOp:translate = (-0.055415526, 0.30179304, -0.01251936)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def RealityKitComponent "VFXEmitter"
+        {
+            token info:id = "RealityKit.VFXEmitter"
+
+            def RealityKitStruct "currentState"
+            {
+                token birthDirection = "Local"
+                token birthLocation = "Volume"
+                int64 burstCount = 100
+                double emissionDuration = 0
+                token emitterShape = "Plane"
+                bool isLocal = 1
+                bool isLocalFields = 0
+                float particleSpeed = 1
+
+                def RealityKitStruct "mainEmitter"
+                {
+                    token billboardMode = "Billboard"
+                    float birthRate = 10
+                    float4 endColorA = (1, 0.008742433, 0, 1)
+                    float particleAngle = 6.2831855
+                    double particleLifeSpan = 1
+                    float particleSize = 2.5
+                    float sizeMultiplierAtEndOfLifespan = 0
+                    float stretchFactor = 0.2
+                    bool useEndColor = 1
+                    bool useEndColorRange = 0
+                }
+
+                def RealityKitStruct "spawnedEmitter"
+                {
+                }
+            }
         }
     }
 }

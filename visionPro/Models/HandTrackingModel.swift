@@ -22,6 +22,7 @@ final class HandTrackingModel {
 
     /// Limite de frames seguidos com ruído que podem ser tolerados
     private let toleratedBadFrames = 5
+    
     /// Quantidade de frames corretos para exibir a esfera
     private let framesToConfirm = 10
 
@@ -52,11 +53,9 @@ final class HandTrackingModel {
 
         let wristTransform = handAnchor.originFromAnchorTransform * wristJoint.anchorFromJointTransform
 
-        // 🔧 Bug 3 corrigido: o sistema de coordenadas do punho é ESPELHADO
-        // entre mão direita e esquerda no ARKit.
-        // Direita: precisamos inverter o sinal (-) pra "palma pra cima" bater com worldUp
-        // Esquerda: o sinal original (+) já funciona corretamente
+        /// Aplica o eixo correto para a mão receber a esfera com o lado certo da mão
         let sign: Float = handAnchor.chirality == .right ? -1 : 1
+        
         let palmNormal = sign * SIMD3<Float>(
             wristTransform.columns.1.x,
             wristTransform.columns.1.y,
