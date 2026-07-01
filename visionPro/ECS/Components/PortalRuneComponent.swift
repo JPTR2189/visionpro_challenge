@@ -33,3 +33,11 @@ struct PortalRuneComponent: Component, Codable {
 struct PortalProgressSlotComponent: Component, Codable {
     var index: Int
 }
+
+struct PortalSurfaceComponent: Component, Codable {
+    var baseScaleX: Float
+    var baseScaleY: Float
+    var baseScaleZ: Float
+    var basePositionZ: Float
+    var phase: Float
+}

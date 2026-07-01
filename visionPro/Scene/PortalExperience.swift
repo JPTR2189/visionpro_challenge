@@ -6,6 +6,7 @@
 //
 
 import RealityKit
+import RealityKitContent
 import SwiftUI
 
 struct RuneDefinition: Identifiable {
@@ -43,7 +44,7 @@ enum PortalExperience {
         frontAnchor.scale = [0.72, 0.72, 0.72]
 
         addLighting(to: frontAnchor)
-        addPortalPlaceholder(to: frontAnchor)
+        addPortal(to: frontAnchor)
         addRunes(to: frontAnchor)
         updateProgress(in: frontAnchor, selectedRuneIDs: selectedRuneIDs)
         updateRuneStates(in: frontAnchor, selectedRuneIDs: selectedRuneIDs, activeRuneID: activeRuneID)
@@ -142,6 +143,81 @@ enum PortalExperience {
         root.addChild(glow)
     }
 
+    private static func addPortal(to root: Entity) {
+        if let portal = makeOfficialPortal() {
+            root.addChild(portal)
+        } else {
+            addPortalPlaceholder(to: root)
+        }
+    }
+
+    private static func makeOfficialPortal() -> Entity? {
+        let portalURL =
+            Bundle.main.url(
+                forResource: "Magic_Portal",
+                withExtension: "usdz",
+                subdirectory: "Resources"
+            ) ?? Bundle.main.url(forResource: "Magic_Portal", withExtension: "usdz")
+            ?? realityKitContentBundle.url(
+                forResource: "Magic_Portal",
+                withExtension: "usdz",
+                subdirectory: "RealityKitContent.rkassets/Materials"
+            ) ?? realityKitContentBundle.url(forResource: "Magic_Portal", withExtension: "usdz")
+
+        guard let portalURL,
+              let portal = try? Entity.load(contentsOf: portalURL) else {
+            return nil
+        }
+
+        portal.name = "MagicPortal"
+        portal.position = [0, 0, 0]
+        configurePortalSurface(in: portal)
+
+        let bounds = portal.visualBounds(relativeTo: portal)
+        let largestExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
+        if largestExtent > 0 {
+            let targetSize: Float = 0.92
+            let normalizedScale = targetSize / largestExtent
+            portal.scale = [normalizedScale, normalizedScale, normalizedScale]
+            portal.position -= bounds.center * normalizedScale
+        }
+
+        return portal
+    }
+
+    private static func configurePortalSurface(in portal: Entity) {
+        guard let surface = findPortalSurface(in: portal) as? ModelEntity else { return }
+
+        surface.name = "PortalSurfaceFluid"
+        surface.components.set(
+            PortalSurfaceComponent(
+                baseScaleX: surface.scale.x,
+                baseScaleY: surface.scale.y,
+                baseScaleZ: surface.scale.z,
+                basePositionZ: surface.position.z,
+                phase: 0.35
+            )
+        )
+    }
+
+    private static func findPortalSurface(in entity: Entity) -> Entity? {
+        if entity.name == "PortalSurface_low_PortalSurface_0" {
+            return entity
+        }
+
+        if entity.name.localizedCaseInsensitiveContains("PortalSurface") {
+            return entity
+        }
+
+        for child in entity.children {
+            if let match = findPortalSurface(in: child) {
+                return match
+            }
+        }
+
+        return nil
+    }
+
     private static func addPortalPlaceholder(to root: Entity) {
         var centerMaterial = UnlitMaterial()
         centerMaterial.color = .init(tint: .init(red: 0.03, green: 0.08, blue: 0.15, alpha: 0.78))
@@ -191,7 +267,7 @@ enum PortalExperience {
                     baseScale: 1.0
                 )
             )
-            rune.components.set(InputTargetComponent())
+            rune.components.set(InputTargetComponent(allowedInputTypes: .indirect))
             rune.components.set(HoverEffectComponent())
             rune.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.068)]))
             root.addChild(rune)

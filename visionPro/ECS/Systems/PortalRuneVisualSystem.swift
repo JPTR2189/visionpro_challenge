@@ -10,12 +10,14 @@ import SwiftUI
 
 struct PortalRuneVisualSystem: System {
     private static let runeQuery = EntityQuery(where: .has(PortalRuneComponent.self))
+    private static let portalSurfaceQuery = EntityQuery(where: .has(PortalSurfaceComponent.self))
 
     init(scene: RealityKit.Scene) {}
 
     static func registerRealityKitContent() {
         PortalRuneComponent.registerComponent()
         PortalProgressSlotComponent.registerComponent()
+        PortalSurfaceComponent.registerComponent()
         PortalRuneVisualSystem.registerSystem()
     }
 
@@ -56,6 +58,24 @@ struct PortalRuneVisualSystem: System {
 
             entity.scale = [targetScale, targetScale, targetScale]
         }
+
+        for entity in context.entities(matching: Self.portalSurfaceQuery, updatingSystemWhen: .rendering) {
+            guard let surface = entity.components[PortalSurfaceComponent.self] else { continue }
+
+            let time = Float(currentTime)
+            let slowWave = sin(time * 1.7 + surface.phase)
+            let detailWave = sin(time * 2.6 + surface.phase * 0.7)
+            entity.scale = [
+                surface.baseScaleX * (1.0 + slowWave * 0.018),
+                surface.baseScaleY * (1.0 + detailWave * 0.014),
+                surface.baseScaleZ
+            ]
+            entity.position.z = surface.basePositionZ + slowWave * 0.012
+
+            if let modelEntity = entity as? ModelEntity {
+                applyPortalSurfaceMaterial(to: modelEntity, pulse: slowWave)
+            }
+        }
     }
 
     private func applyRuneMaterial(to entity: Entity, red: Double, green: Double, blue: Double, opacity: Double, roughness: Float) {
@@ -81,5 +101,18 @@ struct PortalRuneVisualSystem: System {
         material.color = .init(tint: .init(red: 1.0, green: 0.88, blue: 0.22, alpha: opacity))
         glow.model?.materials = [material]
         glow.scale = [scale, scale, scale]
+    }
+
+    private func applyPortalSurfaceMaterial(to modelEntity: ModelEntity, pulse: Float) {
+        let glow = Double(0.54 + pulse * 0.08)
+
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: .init(red: 0.70, green: 0.52, blue: 1.0, alpha: 0.44))
+        material.roughness = .init(floatLiteral: 0.08)
+        material.metallic = .init(floatLiteral: 0.0)
+        material.emissiveColor = .init(color: .init(red: glow, green: 0.38, blue: 1.0, alpha: 0.62))
+        material.emissiveIntensity = .init(floatLiteral: 0.85)
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.46))
+        modelEntity.model?.materials = [material]
     }
 }
