@@ -20,6 +20,9 @@ final class ARKitSessionManager {
     
     private(set) var currentRoomAnchor: RoomAnchor?
     private(set) var canFinishScanning = false
+    private(set) var meshAnchorCount = 0
+
+    private static let minAnchorsToFinish = 5
 
     // MARK: - Configuração
 
@@ -90,6 +93,10 @@ final class ARKitSessionManager {
 
     func updateMeshAnchor(_ anchor: MeshAnchor) {
         scannedMeshAnchors[anchor.id] = anchor
+        meshAnchorCount = scannedMeshAnchors.count
+        if mappingState == .scanning && meshAnchorCount >= ARKitSessionManager.minAnchorsToFinish {
+            canFinishScanning = true
+        }
     }
 
     func removeMeshAnchor(id: UUID) {

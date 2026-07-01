@@ -6,13 +6,16 @@ import UIKit
 enum TextureMaterialLoader {
 
     static func loadWallMaterial() async -> (any RealityKit.Material)? {
-        guard let entity = try? await Entity(named: "stoneTexture", in: realityKitContentBundle) else {
+        guard let url = realityKitContentBundle.url(forResource: "stoneTexture", withExtension: "usdz"),
+              let entity = try? await Entity(contentsOf: url) else {
             return nil
         }
         return extractFirstMaterial(from: entity)
     }
+
     static func loadFloorMaterial() async -> (any RealityKit.Material)? {
-        guard let entity = try? await Entity(named: "grassTexture", in: realityKitContentBundle) else {
+        guard let url = realityKitContentBundle.url(forResource: "grassTexture", withExtension: "usdz"),
+              let entity = try? await Entity(contentsOf: url) else {
             return nil
         }
         return extractFirstMaterial(from: entity)
