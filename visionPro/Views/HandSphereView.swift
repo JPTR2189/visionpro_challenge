@@ -27,7 +27,7 @@ struct HandSphereView: View {
 
     @State private var sharedAudioResource: AudioFileResource?
 
-    private let targetScale: Float = 0.15
+    private let targetScale: Float = 0.05
     private let palmOffset: SIMD3<Float> = [0, 0.1, 0]
     private let animationDuration: UInt64 = 350_000_000
 
