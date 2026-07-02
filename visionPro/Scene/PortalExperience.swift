@@ -61,12 +61,49 @@ enum PortalExperience {
             resetPortalLights(in: root)
             try? await Task.sleep(nanoseconds: 700_000_000)
 
-            let sequence = makeRandomRuneSequence(length: sequenceLength)
+            let sequence = makeRandomRuneSequenceBindings(length: sequenceLength)
             await playLightSequence(sequence, in: root)
         }
     }
 
-    private static func makeRandomRuneSequence(length: Int) -> [RuneLightBinding] {
+    static func makeRandomRuneSequence() -> [String] {
+        makeRandomRuneSequenceBindings(length: sequenceLength).map(\.rockName)
+    }
+
+    static func playRuneSequence(_ rockNames: [String], in root: Entity) async {
+        let sequence = rockNames.compactMap(binding(forRockName:))
+        await playLightSequence(sequence, in: root)
+    }
+
+    static func flashSelection(for rockName: String, in root: Entity, isCorrect: Bool) async {
+        guard let rune = binding(forRockName: rockName) else { return }
+
+        let lightName = isCorrect ? rune.purpleLightName : rune.redLightName
+        setPortalLight(named: lightName, enabled: true, in: root)
+        try? await Task.sleep(nanoseconds: 280_000_000)
+        setPortalLight(named: lightName, enabled: false, in: root)
+    }
+
+    static func resetLights(in root: Entity) {
+        resetPortalLights(in: root)
+    }
+
+    static func rockName(containing entity: Entity) -> String? {
+        var current: Entity? = entity
+
+        while let entity = current {
+            let name = entity.name.uppercased()
+            if floatingStoneNames.contains(name) {
+                return name
+            }
+
+            current = entity.parent
+        }
+
+        return nil
+    }
+
+    private static func makeRandomRuneSequenceBindings(length: Int) -> [RuneLightBinding] {
         guard length > 0 else { return [] }
 
         var sequence: [RuneLightBinding] = []
@@ -81,6 +118,10 @@ enum PortalExperience {
         }
 
         return sequence
+    }
+
+    private static func binding(forRockName rockName: String) -> RuneLightBinding? {
+        runeLightBindings.first { $0.rockName == rockName.uppercased() }
     }
 
     private static func addLighting(to root: Entity) {
@@ -329,6 +370,8 @@ enum PortalExperience {
         collectFloatingStones(from: portal, into: &floatingStones)
 
         for (index, stone) in floatingStones.enumerated() {
+            configureStoneInteraction(on: stone)
+
             stone.components.set(
                 PortalFloatingStoneComponent(
                     runeID: nil,
@@ -342,6 +385,19 @@ enum PortalExperience {
                 )
             )
         }
+    }
+
+    private static func configureStoneInteraction(on stone: Entity) {
+        let bounds = stone.visualBounds(relativeTo: stone)
+        let radius = max(bounds.extents.x, bounds.extents.y, bounds.extents.z) * 0.62
+
+        stone.components.set(InputTargetComponent(allowedInputTypes: .indirect))
+        stone.components.set(HoverEffectComponent())
+        stone.components.set(
+            CollisionComponent(
+                shapes: [.generateSphere(radius: max(radius, 0.12))]
+            )
+        )
     }
 
     private static func collectFloatingStones(from entity: Entity, into result: inout [Entity]) {
