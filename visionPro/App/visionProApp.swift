@@ -6,6 +6,7 @@ struct visionProApp: App {
     @State private var appModel = AppModel()
 
     init() {
+        WallSurfaceComponent.registerComponent()
         PortalSpawnerComponent.registerComponent()
         PortalSpawnerSystem.registerSystem()
     }
@@ -16,9 +17,11 @@ struct visionProApp: App {
                 .environment(appModel)
         }
 
-        ImmersiveSpace(id: appModel.immersiveSpaceID) {
-            ImmersiveView()
+        ImmersiveSpace(id: appModel.portalSpaceID) {
+            PortalExperienceView()
                 .environment(appModel)
+                .onAppear   { appModel.portalSpaceState = .open   }
+                .onDisappear { appModel.portalSpaceState = .closed }
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }

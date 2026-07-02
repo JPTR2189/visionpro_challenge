@@ -1,38 +1,26 @@
 import SwiftUI
 
 struct ContentView: View {
-    @Environment(AppModel.self) private var appModel
-    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
-    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
     var body: some View {
-        VStack(spacing: 24) {
-            Text("Portal Spawner Test")
+        VStack(spacing: 20) {
+            Text("Runic Portals")
                 .font(.largeTitle)
+                .fontWeight(.semibold)
 
-            Toggle("Espaço Imersivo", isOn: Binding(
-                get: { appModel.immersiveSpaceState == .open },
-                set: { isOn in
-                    Task {
-                        if isOn {
-                            appModel.immersiveSpaceState = .inTransition
-                            switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
-                            case .opened:
-                                appModel.immersiveSpaceState = .open
-                            default:
-                                appModel.immersiveSpaceState = .closed
-                            }
-                        } else {
-                            appModel.immersiveSpaceState = .inTransition
-                            await dismissImmersiveSpace()
-                            appModel.immersiveSpaceState = .closed
-                        }
-                    }
-                }
-            ))
-            .toggleStyle(.button)
-            .padding()
+            Text("Open the portal experience to begin mapping your environment.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TogglePortalSpaceButton()
         }
-        .padding()
+        .frame(width: 380)
+        .padding(32)
     }
+}
+
+#Preview(windowStyle: .automatic) {
+    ContentView()
+        .environment(AppModel())
 }
