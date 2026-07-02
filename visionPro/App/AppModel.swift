@@ -10,13 +10,20 @@ import SwiftUI
 @Observable
 class AppModel {
     let immersiveSpaceID = "ImmersiveSpace"
+
     enum ImmersiveSpaceState {
         case closed
         case inTransition
         case open
     }
+
     var immersiveSpaceState = ImmersiveSpaceState.closed
 
-    // Para testar a animação [DEBUG]
+    var isPlaying: Bool {
+        immersiveSpaceState == .open
+    }
+
+    // 🧪 Temporário, só para testar a animação da esfera sem depender da mão.
+    // Remover esta propriedade quando o app estiver validado por completo.
     var debugForceShow = false
 }
