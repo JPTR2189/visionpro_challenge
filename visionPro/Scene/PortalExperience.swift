@@ -6,35 +6,13 @@
 //
 
 import RealityKit
-import RealityKitContent
 import SwiftUI
-
-struct RuneDefinition: Identifiable {
-    let id: String
-    let symbol: String
-    let red: Double
-    let green: Double
-    let blue: Double
-
-    var color: Color {
-        Color(red: red, green: green, blue: blue)
-    }
-}
 
 @MainActor
 enum PortalExperience {
-    static let runeDefinitions: [RuneDefinition] = [
-        .init(id: "ignis", symbol: "I", red: 0.92, green: 0.18, blue: 0.16),
-        .init(id: "aqua", symbol: "A", red: 0.10, green: 0.68, blue: 0.92),
-        .init(id: "terra", symbol: "T", red: 0.18, green: 0.78, blue: 0.34),
-        .init(id: "lux", symbol: "L", red: 0.96, green: 0.82, blue: 0.20),
-        .init(id: "umbra", symbol: "U", red: 0.54, green: 0.30, blue: 0.88),
-        .init(id: "ventus", symbol: "V", red: 0.35, green: 0.92, blue: 0.74),
-        .init(id: "ordo", symbol: "O", red: 0.96, green: 0.46, blue: 0.14),
-        .init(id: "nox", symbol: "N", red: 0.30, green: 0.38, blue: 0.88)
-    ]
+    private static let sequenceLength = 6
 
-    static func makeScene(selectedRuneIDs: [String], activeRuneID: String?) -> Entity {
+    static func makeScene() -> Entity {
         let root = Entity()
         root.name = "PortalExperience"
 
@@ -45,83 +23,64 @@ enum PortalExperience {
 
         addLighting(to: frontAnchor)
         addPortal(to: frontAnchor)
-        addRunes(to: frontAnchor)
-        updateProgress(in: frontAnchor, selectedRuneIDs: selectedRuneIDs)
-        updateRuneStates(in: frontAnchor, selectedRuneIDs: selectedRuneIDs, activeRuneID: activeRuneID)
 
         root.addChild(frontAnchor)
         return root
     }
 
-    static func makeRandomSequence(length: Int) -> [String] {
+    static func startFloatingStoneMotion(in root: Entity) {
+        var floatingStones: [Entity] = []
+        collectFloatingStones(from: root, into: &floatingStones)
+
+        for (index, stone) in floatingStones.enumerated() {
+            let phase = Float(index) * 0.72
+            let amplitude: Float = 0.028
+            let duration = 1.45 + Double(index % 3) * 0.18
+            let tilt: Float = 0.045
+            let basePosition = stone.position
+            let baseOrientation = stone.orientation
+            let baseScale = stone.scale
+
+            Task { @MainActor in
+                await animateFloatingStone(
+                    stone,
+                    basePosition: basePosition,
+                    baseOrientation: baseOrientation,
+                    baseScale: baseScale,
+                    phase: phase,
+                    amplitude: amplitude,
+                    duration: duration,
+                    tilt: tilt
+                )
+            }
+        }
+    }
+
+    static func startGeniusLightSequence(in root: Entity) {
+        Task { @MainActor in
+            resetPortalLights(in: root)
+            try? await Task.sleep(nanoseconds: 700_000_000)
+
+            let sequence = makeRandomRuneSequence(length: sequenceLength)
+            await playLightSequence(sequence, in: root)
+        }
+    }
+
+    private static func makeRandomRuneSequence(length: Int) -> [RuneLightBinding] {
         guard length > 0 else { return [] }
 
-        var sequence: [String] = []
-        var previousID: String?
+        var sequence: [RuneLightBinding] = []
+        var previousRuneName: String?
 
         while sequence.count < length {
-            let candidates = runeDefinitions.map(\.id).filter { $0 != previousID }
-            guard let nextID = candidates.randomElement() else { break }
+            let candidates = runeLightBindings.filter { $0.rockName != previousRuneName }
+            guard let nextRune = candidates.randomElement() else { break }
 
-            sequence.append(nextID)
-            previousID = nextID
+            sequence.append(nextRune)
+            previousRuneName = nextRune.rockName
         }
 
         return sequence
-    }
-
-    static func updateProgress(in root: Entity, selectedRuneIDs: [String]) {
-        root.findEntity(named: "PortalProgress")?.removeFromParent()
-
-        let container = root.findEntity(named: "PortalWorldAnchor") ?? root
-        let progressRoot = Entity()
-        progressRoot.name = "PortalProgress"
-        progressRoot.position = [0, -0.02, 0.26]
-
-        let spacing: Float = 0.115
-        let visibleIDs = Array(selectedRuneIDs.suffix(6))
-        let startX = -Float(max(visibleIDs.count - 1, 0)) * spacing / 2
-
-        for (index, runeID) in visibleIDs.enumerated() {
-            guard let definition = runeDefinitions.first(where: { $0.id == runeID }) else { continue }
-
-            let marker = makeCenterRune(definition: definition)
-            marker.name = "ProgressRune-\(definition.id)"
-            marker.position = [startX + Float(index) * spacing, 0, 0.02]
-            marker.components.set(PortalProgressSlotComponent(index: index))
-            progressRoot.addChild(marker)
-        }
-
-        container.addChild(progressRoot)
-    }
-
-    static func setRuneState(in root: Entity, runeID: String, state: PortalRuneVisualState) {
-        guard let rune = root.findEntity(named: "Rune-\(runeID)"),
-              var component = rune.components[PortalRuneComponent.self] else {
-            return
-        }
-
-        component.visualState = state
-        component.stateStartedAt = CACurrentMediaTime()
-        rune.components.set(component)
-    }
-
-    static func updateRuneStates(in root: Entity, selectedRuneIDs: [String], activeRuneID: String?) {
-        for definition in runeDefinitions {
-            guard let rune = root.findEntity(named: "Rune-\(definition.id)"),
-                  var component = rune.components[PortalRuneComponent.self] else {
-                continue
-            }
-
-            if definition.id == activeRuneID {
-                component.visualState = .focused
-            } else {
-                component.visualState = .normal
-            }
-
-            component.stateStartedAt = CACurrentMediaTime()
-            rune.components.set(component)
-        }
     }
 
     private static func addLighting(to root: Entity) {
@@ -133,14 +92,49 @@ enum PortalExperience {
             simd_quatf(angle: -.pi / 7, axis: [1, 0, 0]) *
             simd_quatf(angle: -.pi / 9, axis: [0, 1, 0])
         root.addChild(keyLight)
+    }
 
-        let glow = PointLight()
-        glow.name = "PortalCenterGlow"
-        glow.light.intensity = 2200
-        glow.light.color = .init(red: 0.38, green: 0.72, blue: 1.0, alpha: 1.0)
-        glow.light.attenuationRadius = 3
-        glow.position = [0, 0, 0.18]
-        root.addChild(glow)
+    private static func animateFloatingStone(
+        _ stone: Entity,
+        basePosition: SIMD3<Float>,
+        baseOrientation: simd_quatf,
+        baseScale: SIMD3<Float>,
+        phase: Float,
+        amplitude: Float,
+        duration: Double,
+        tilt: Float
+    ) async {
+        var direction: Float = 1
+
+        while !Task.isCancelled {
+            let drift = sin(phase + direction * 0.9) * amplitude * 0.22
+            let depth = cos(phase + direction * 1.2) * amplitude * 0.16
+            let liftedPosition = basePosition + [
+                drift,
+                amplitude * direction,
+                depth
+            ]
+
+            let rotation =
+                baseOrientation *
+                simd_quatf(angle: tilt * direction, axis: [1, 0, 0]) *
+                simd_quatf(angle: tilt * 0.45 * sin(phase), axis: [0, 1, 0]) *
+                simd_quatf(angle: tilt * 0.55 * direction, axis: [0, 0, 1])
+
+            stone.move(
+                to: Transform(
+                    scale: baseScale,
+                    rotation: rotation,
+                    translation: liftedPosition
+                ),
+                relativeTo: stone.parent,
+                duration: duration,
+                timingFunction: .easeInOut
+            )
+
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            direction *= -1
+        }
     }
 
     private static func addPortal(to root: Entity) {
@@ -154,15 +148,13 @@ enum PortalExperience {
     private static func makeOfficialPortal() -> Entity? {
         let portalURL =
             Bundle.main.url(
-                forResource: "Magic_Portal",
+                forResource: "Scene - Portal+Runes - Lights Purple and Red",
                 withExtension: "usdz",
                 subdirectory: "Resources"
-            ) ?? Bundle.main.url(forResource: "Magic_Portal", withExtension: "usdz")
-            ?? realityKitContentBundle.url(
-                forResource: "Magic_Portal",
-                withExtension: "usdz",
-                subdirectory: "RealityKitContent.rkassets/Materials"
-            ) ?? realityKitContentBundle.url(forResource: "Magic_Portal", withExtension: "usdz")
+            ) ?? Bundle.main.url(
+                forResource: "Scene - Portal+Runes - Lights Purple and Red",
+                withExtension: "usdz"
+            )
 
         guard let portalURL,
               let portal = try? Entity.load(contentsOf: portalURL) else {
@@ -171,52 +163,209 @@ enum PortalExperience {
 
         portal.name = "MagicPortal"
         portal.position = [0, 0, 0]
-        configurePortalSurface(in: portal)
 
         let bounds = portal.visualBounds(relativeTo: portal)
         let largestExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
         if largestExtent > 0 {
-            let targetSize: Float = 0.92
+            let targetSize: Float = 1.32
             let normalizedScale = targetSize / largestExtent
             portal.scale = [normalizedScale, normalizedScale, normalizedScale]
             portal.position -= bounds.center * normalizedScale
         }
 
+        configureFloatingStones(in: portal)
+        configureRuntimePortalLights(in: portal)
+        resetPortalLights(in: portal)
+
         return portal
     }
 
-    private static func configurePortalSurface(in portal: Entity) {
-        guard let surface = findPortalSurface(in: portal) as? ModelEntity else { return }
+    private static func playLightSequence(_ sequence: [RuneLightBinding], in root: Entity) async {
+        for rune in sequence {
+            resetPortalLights(in: root)
+            setPortalLight(named: rune.purpleLightName, enabled: true, in: root)
+            try? await Task.sleep(nanoseconds: 650_000_000)
 
-        surface.name = "PortalSurfaceFluid"
-        surface.components.set(
-            PortalSurfaceComponent(
-                baseScaleX: surface.scale.x,
-                baseScaleY: surface.scale.y,
-                baseScaleZ: surface.scale.z,
-                basePositionZ: surface.position.z,
-                phase: 0.35
-            )
-        )
-    }
-
-    private static func findPortalSurface(in entity: Entity) -> Entity? {
-        if entity.name == "PortalSurface_low_PortalSurface_0" {
-            return entity
+            setPortalLight(named: rune.purpleLightName, enabled: false, in: root)
+            try? await Task.sleep(nanoseconds: 220_000_000)
         }
 
-        if entity.name.localizedCaseInsensitiveContains("PortalSurface") {
-            return entity
+        resetPortalLights(in: root)
+    }
+
+    private static func resetPortalLights(in root: Entity) {
+        for rune in runeLightBindings {
+            setPortalLight(named: rune.purpleLightName, enabled: false, in: root)
+            setPortalLight(named: rune.redLightName, enabled: false, in: root)
+        }
+    }
+
+    private struct RuneLightBinding: Equatable {
+        let rockName: String
+        let purpleLightName: String
+        let redLightName: String
+        let lightPosition: SIMD3<Float>
+    }
+
+    private static let runeLightBindings: [RuneLightBinding] = [
+        RuneLightBinding(
+            rockName: "ROCK_A",
+            purpleLightName: "PointLight_N",
+            redLightName: "PointLight_N_red",
+            lightPosition: [-0.41637206, 3.157634, -0.3517058]
+        ),
+        RuneLightBinding(
+            rockName: "ROCK_B",
+            purpleLightName: "PointLight_NE",
+            redLightName: "PointLight_NE_red",
+            lightPosition: [-1.8447664, 2.6147785, -0.3517058]
+        ),
+        RuneLightBinding(
+            rockName: "ROCK_C",
+            purpleLightName: "PointLight_E",
+            redLightName: "PointLight_E_red",
+            lightPosition: [-2.3906116, 1.2723978, -0.3517058]
+        ),
+        RuneLightBinding(
+            rockName: "ROCK_D",
+            purpleLightName: "PointLight_SE",
+            redLightName: "PointLight_SE_red",
+            lightPosition: [-1.8447664, -0.0069098473, -0.3517058]
+        ),
+        RuneLightBinding(
+            rockName: "ROCK_E",
+            purpleLightName: "PointLight_S",
+            redLightName: "PointLight_S_red",
+            lightPosition: [-0.41637206, -0.6560919, -0.3517058]
+        ),
+        RuneLightBinding(
+            rockName: "ROCK_F",
+            purpleLightName: "PointLight_SW",
+            redLightName: "PointLight_SW_red",
+            lightPosition: [0.906744, -0.0069098473, -0.3517058]
+        ),
+        RuneLightBinding(
+            rockName: "ROCK_G",
+            purpleLightName: "PointLight_W",
+            redLightName: "PointLight_W_red",
+            lightPosition: [1.4958928, 1.2723978, -0.3517058]
+        ),
+        RuneLightBinding(
+            rockName: "ROCK_H",
+            purpleLightName: "PointLight_NW",
+            redLightName: "PointLight_NW_red",
+            lightPosition: [0.906744, 2.6147785, -0.3517058]
+        )
+    ]
+
+    private static func setPortalLight(named lightName: String, enabled: Bool, in root: Entity) {
+        if let runtimeLight = root.findEntity(named: runtimeLightName(for: lightName)) {
+            runtimeLight.isEnabled = enabled
+            return
+        }
+
+        guard let light = root.findEntity(named: lightName) else {
+            return
+        }
+
+        light.isEnabled = enabled
+        setChildrenEnabled(of: light, enabled: enabled)
+    }
+
+    private static func setChildrenEnabled(of entity: Entity, enabled: Bool) {
+        for child in entity.children {
+            child.isEnabled = enabled
+            setChildrenEnabled(of: child, enabled: enabled)
+        }
+    }
+
+    private static func configureRuntimePortalLights(in portal: Entity) {
+        for rune in runeLightBindings {
+            addRuntimePointLight(
+                named: rune.purpleLightName,
+                red: 0.58,
+                green: 0.16,
+                blue: 1.0,
+                position: rune.lightPosition,
+                to: portal
+            )
+            addRuntimePointLight(
+                named: rune.redLightName,
+                red: 1.0,
+                green: 0.08,
+                blue: 0.04,
+                position: rune.lightPosition,
+                to: portal
+            )
+        }
+    }
+
+    private static func addRuntimePointLight(
+        named lightName: String,
+        red: CGFloat,
+        green: CGFloat,
+        blue: CGFloat,
+        position: SIMD3<Float>,
+        to portal: Entity
+    ) {
+        let light = PointLight()
+        light.name = runtimeLightName(for: lightName)
+        light.position = position + [0, 0, runtimeLightForwardOffset]
+        light.light.color = .init(red: red, green: green, blue: blue, alpha: 1.0)
+        light.light.intensity = 18_000
+        light.light.attenuationRadius = 1.05
+        light.isEnabled = false
+        portal.addChild(light)
+    }
+
+    private static func runtimeLightName(for lightName: String) -> String {
+        "Runtime_\(lightName)"
+    }
+
+    private static let runtimeLightForwardOffset: Float = 0.9
+
+    private static func configureFloatingStones(in portal: Entity) {
+        var floatingStones: [Entity] = []
+        collectFloatingStones(from: portal, into: &floatingStones)
+
+        for (index, stone) in floatingStones.enumerated() {
+            stone.components.set(
+                PortalFloatingStoneComponent(
+                    runeID: nil,
+                    basePosition: stone.position,
+                    baseOrientation: stone.orientation,
+                    baseScale: stone.scale,
+                    phase: Float(index) * 0.78,
+                    amplitude: 0.028,
+                    speed: 0.82 + Float(index % 3) * 0.10,
+                    tilt: 0.045
+                )
+            )
+        }
+    }
+
+    private static func collectFloatingStones(from entity: Entity, into result: inout [Entity]) {
+        let name = entity.name.uppercased()
+        if Self.floatingStoneNames.contains(name) {
+            result.append(entity)
+            return
         }
 
         for child in entity.children {
-            if let match = findPortalSurface(in: child) {
-                return match
-            }
+            collectFloatingStones(from: child, into: &result)
         }
-
-        return nil
     }
+
+    private static let floatingStoneNames: Set<String> = [
+        "ROCK_A",
+        "ROCK_B",
+        "ROCK_C",
+        "ROCK_D",
+        "ROCK_E",
+        "ROCK_F",
+        "ROCK_G",
+        "ROCK_H"
+    ]
 
     private static func addPortalPlaceholder(to root: Entity) {
         var centerMaterial = UnlitMaterial()
@@ -247,115 +396,5 @@ enum PortalExperience {
             segment.position = [cos(angle) * ringRadius, sin(angle) * ringRadius, 0]
             root.addChild(segment)
         }
-    }
-
-    private static func addRunes(to root: Entity) {
-        let radius: Float = 0.70
-
-        for (index, definition) in runeDefinitions.enumerated() {
-            let angle = Float(index) / Float(runeDefinitions.count) * 2 * .pi + .pi / 2
-            let rune = makeRune(definition: definition, radius: 0.052, depth: 0.018)
-            rune.name = "Rune-\(definition.id)"
-            rune.position = [cos(angle) * radius, sin(angle) * radius, 0.055]
-            rune.components.set(
-                PortalRuneComponent(
-                    id: definition.id,
-                    symbol: definition.symbol,
-                    red: definition.red,
-                    green: definition.green,
-                    blue: definition.blue,
-                    baseScale: 1.0
-                )
-            )
-            rune.components.set(InputTargetComponent(allowedInputTypes: .indirect))
-            rune.components.set(HoverEffectComponent())
-            rune.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.068)]))
-            root.addChild(rune)
-        }
-    }
-
-    private static func makeRune(definition: RuneDefinition, radius: Float, depth: Float) -> Entity {
-        let runeRoot = Entity()
-        runeRoot.name = "RuneRoot-\(definition.id)"
-
-        var runeMaterial = PhysicallyBasedMaterial()
-        runeMaterial.baseColor = .init(tint: .init(
-            red: definition.red,
-            green: definition.green,
-            blue: definition.blue,
-            alpha: 0.82
-        ))
-        runeMaterial.roughness = .init(floatLiteral: 0.32)
-
-        let disc = ModelEntity(
-            mesh: .generateCylinder(height: depth, radius: radius),
-            materials: [runeMaterial]
-        )
-        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        disc.name = "RuneDisc"
-
-        var glowMaterial = UnlitMaterial()
-        glowMaterial.color = .init(tint: .init(red: 1.0, green: 0.92, blue: 0.36, alpha: 0.0))
-
-        let glow = ModelEntity(
-            mesh: .generateCylinder(height: depth * 0.45, radius: radius * 1.95),
-            materials: [glowMaterial]
-        )
-        glow.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        glow.position = [0, 0, -depth * 0.35]
-        glow.name = "RuneGlow"
-
-        let symbol = makeRuneSymbol(definition.symbol, radius: radius)
-        symbol.position = [-radius * 0.30, -radius * 0.34, depth * 1.05]
-
-        runeRoot.addChild(glow)
-        runeRoot.addChild(disc)
-        runeRoot.addChild(symbol)
-        return runeRoot
-    }
-
-    private static func makeCenterRune(definition: RuneDefinition) -> Entity {
-        let runeRoot = Entity()
-        runeRoot.name = "CenterRune-\(definition.id)"
-
-        var discMaterial = UnlitMaterial()
-        discMaterial.color = .init(tint: .init(
-            red: definition.red,
-            green: definition.green,
-            blue: definition.blue,
-            alpha: 0.98
-        ))
-
-        let disc = ModelEntity(
-            mesh: .generateCylinder(height: 0.01, radius: 0.052),
-            materials: [discMaterial]
-        )
-        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-
-        let symbol = makeRuneSymbol(definition.symbol, radius: 0.064)
-        symbol.position = [-0.020, -0.026, 0.016]
-
-        runeRoot.addChild(disc)
-        runeRoot.addChild(symbol)
-        return runeRoot
-    }
-
-    private static func makeRuneSymbol(_ text: String, radius: Float) -> ModelEntity {
-        let fontSize = CGFloat(radius * 1.25)
-        let mesh = MeshResource.generateText(
-            text,
-            extrusionDepth: 0.004,
-            font: .systemFont(ofSize: fontSize, weight: .bold),
-            containerFrame: .zero,
-            alignment: .center,
-            lineBreakMode: .byClipping
-        )
-
-        var material = UnlitMaterial()
-        material.color = .init(tint: .white)
-
-        let symbol = ModelEntity(mesh: mesh, materials: [material])
-        symbol.name = "RuneSymbol-\(text)"
-        return symbol
     }
 }

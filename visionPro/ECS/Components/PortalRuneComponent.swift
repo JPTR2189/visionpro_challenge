@@ -34,10 +34,13 @@ struct PortalProgressSlotComponent: Component, Codable {
     var index: Int
 }
 
-struct PortalSurfaceComponent: Component, Codable {
-    var baseScaleX: Float
-    var baseScaleY: Float
-    var baseScaleZ: Float
-    var basePositionZ: Float
+struct PortalFloatingStoneComponent: Component {
+    var runeID: String?
+    var basePosition: SIMD3<Float>
+    var baseOrientation: simd_quatf
+    var baseScale: SIMD3<Float>
     var phase: Float
+    var amplitude: Float
+    var speed: Float
+    var tilt: Float
 }
