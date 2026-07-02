@@ -58,5 +58,19 @@ def Xform "Root"
         float3 xformOp:scale = (1, 1, 1)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
     }
+
+    def "stoneTexture" (
+        active = true
+        references = @stoneTexture.usdz@
+    )
+    {
+    }
+
+    def "grassTexture" (
+        active = true
+        references = @grassTexture.usdz@
+    )
+    {
+    }
 }
 

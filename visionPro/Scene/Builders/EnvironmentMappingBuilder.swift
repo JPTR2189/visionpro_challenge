@@ -51,6 +51,17 @@ enum EnvironmentMappingBuilder {
         }
         
 
+        if let occlusionEntity = makeSubEntity(
+            vertices: allVertices,
+            indices: allIndices,
+            classifications: classifications,
+            condition: { $0 != .floor && $0 != .wall },
+            material: OcclusionMaterial(),
+            projection: .none
+        ) {
+            root.addChild(occlusionEntity)
+        }
+
         return root.children.isEmpty ? nil : root
     }
 
