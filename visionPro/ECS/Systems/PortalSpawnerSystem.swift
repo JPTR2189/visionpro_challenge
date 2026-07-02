@@ -24,18 +24,48 @@ struct PortalSpawnerSystem: System {
         }
     }
 
-    private func spawnPortal(on parent: Entity, template: Entity, headTransform: simd_float4x4, spawner: PortalSpawnerComponent) {
+    private func spawnPortal(
+        on parent: Entity,
+        template: Entity,
+        headTransform: simd_float4x4,
+        spawner: PortalSpawnerComponent
+    ) {
         let portal = template.clone(recursive: true)
 
-        let position = Self.randomPosition(relativeTo: headTransform, spawner: spawner)
+        let position = Self.randomPosition(
+            relativeTo: headTransform,
+            spawner: spawner
+        )
+
         portal.position = position
 
-        let headPos = SIMD3<Float>(headTransform.columns.3.x,
-                                    headTransform.columns.3.y,
-                                    headTransform.columns.3.z)
-        portal.look(at: headPos, from: position, relativeTo: nil)
+        let headPosition = SIMD3<Float>(
+            headTransform.columns.3.x,
+            headTransform.columns.3.y,
+            headTransform.columns.3.z
+        )
+
+        portal.look(
+            at: headPosition,
+            from: position,
+            relativeTo: nil
+        )
+
+        let finalTransform = portal.transform
+
+        var initialTransform = finalTransform
+        initialTransform.scale = finalTransform.scale * 0.001
+
+        portal.transform = initialTransform
 
         parent.addChild(portal)
+
+        portal.move(
+            to: finalTransform,
+            relativeTo: parent,
+            duration: 0.65,
+            timingFunction: .easeInOut
+        )
     }
 
     static func randomPosition(relativeTo headTransform: simd_float4x4,
