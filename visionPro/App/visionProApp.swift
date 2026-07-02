@@ -1,17 +1,16 @@
-//
-//  visionProApp.swift
-//  visionPro
-//
-//  Created by Jean Pierre on 23/06/26.
-//
-
 import SwiftUI
+import RealityKit
 
 @main
 struct visionProApp: App {
     @State private var appModel = AppModel()
 
-    var body: some Scene {
+    init() {
+        PortalSpawnerComponent.registerComponent()
+        PortalSpawnerSystem.registerSystem()
+    }
+
+    var body: some SwiftUI.Scene {
         WindowGroup {
             ContentView()
                 .environment(appModel)
@@ -24,4 +23,3 @@ struct visionProApp: App {
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }
-

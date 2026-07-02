@@ -76,7 +76,7 @@ def Xform "Root"
         rel material:binding = </Root/FireBallMaterial> (
             bindMaterialAs = "weakerThanDescendants"
         )
-        float3 xformOp:translate = (-0.04815016, 0.844074, 0.08088682)
+        float3 xformOp:translate = (-0.04815016, 0.9106716, 0.08088682)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
         def RealityKitComponent "PointLight"
