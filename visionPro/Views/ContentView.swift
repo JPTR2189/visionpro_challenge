@@ -1,22 +1,17 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Runic Portals")
-                .font(.largeTitle)
-                .fontWeight(.semibold)
-
-            Text("Open the portal experience to begin mapping your environment.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            TogglePortalSpaceButton()
+        switch appModel.onboardingState {
+        case .hero:
+            HeroView()
+        case .tutorial(let step):
+            TutorialContainerView(currentStep: step)
+        case .done:
+            MainMenuView()
         }
-        .frame(width: 380)
-        .padding(32)
     }
 }
 
