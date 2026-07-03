@@ -4,20 +4,27 @@ import ARKit
 
 struct PortalExperienceView: View {
 
+    @Environment(\.openWindow) private var openWindow
+
     @State private var arSession  = ARKitSessionManager()
     @State private var sceneRoot  = Entity()
     @State private var wallMaterial: (any RealityKit.Material)?
     @State private var floorMaterial: (any RealityKit.Material)?
     @State private var scanningMaterial: (any RealityKit.Material)?
     @State private var meshEntities = [UUID: Entity]()
+    @State private var portalScene: Entity?
+    @State private var currentSequence: [String] = []
+    @State private var selectedIndex = 0
+    @State private var isAcceptingRuneInput = false
 
     var body: some View {
         RealityView { content, attachments in
             content.add(sceneRoot)
+
             if let uiEntity = attachments.entity(for: "MappingUI") {
                 // Ancorado ao content (espaço imersivo) e não ao sceneRoot
                 // para que apareça à frente do usuário no momento de entrada
-                uiEntity.position = [0, 1.6, -1.0]
+                uiEntity.position = [0, 1.25, -1.0]
                 content.add(uiEntity)
             }
         } attachments: {
@@ -31,6 +38,76 @@ struct PortalExperienceView: View {
         .task { await arSession.run() }
         .task { await processRoomUpdates() }
         .task { await processMeshUpdates() }
+        .onDisappear {
+            openWindow(id: "MainWindow")
+        }
+        .gesture(
+            TapGesture()
+                .targetedToAnyEntity()
+                .onEnded { value in
+                    handleRuneTap(value.entity)
+                }
+        )
+    }
+
+    @MainActor
+    private func addPortalExperienceIfNeeded() {
+        guard portalScene == nil else { return }
+
+        let portal = PortalExperience.makeScene()
+        portalScene = portal
+        sceneRoot.addChild(portal)
+        PortalExperience.startFloatingStoneMotion(in: portal)
+        startNewRound(in: portal)
+    }
+
+    @MainActor
+    private func startNewRound(in scene: Entity) {
+        isAcceptingRuneInput = false
+        selectedIndex = 0
+        currentSequence = PortalExperience.makeRandomRuneSequence()
+
+        Task { @MainActor in
+            PortalExperience.resetLights(in: scene)
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            await PortalExperience.playRuneSequence(currentSequence, in: scene)
+            isAcceptingRuneInput = true
+        }
+    }
+
+    @MainActor
+    private func handleRuneTap(_ entity: Entity) {
+        guard isAcceptingRuneInput,
+              let portalScene,
+              selectedIndex < currentSequence.count,
+              let selectedRockName = PortalExperience.rockName(containing: entity) else {
+            return
+        }
+
+        let expectedRockName = currentSequence[selectedIndex]
+        let isCorrect = selectedRockName == expectedRockName
+        isAcceptingRuneInput = false
+
+        Task { @MainActor in
+            await PortalExperience.flashSelection(
+                for: selectedRockName,
+                in: portalScene,
+                isCorrect: isCorrect
+            )
+
+            if isCorrect {
+                selectedIndex += 1
+                if selectedIndex < currentSequence.count {
+                    isAcceptingRuneInput = true
+                } else {
+                    try? await Task.sleep(nanoseconds: 700_000_000)
+                    startNewRound(in: portalScene)
+                }
+            } else {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                startNewRound(in: portalScene)
+            }
+        }
     }
 
     // MARK: - Room Tracking: aguarda cômodo completo
@@ -72,6 +149,8 @@ struct PortalExperienceView: View {
         for anchor in arSession.scannedMeshAnchors.values {
             refreshMeshEntity(for: anchor)
         }
+
+        addPortalExperienceIfNeeded()
     }
 
     @MainActor
@@ -99,7 +178,7 @@ struct PortalExperienceView: View {
     private var mappingOverlay: some View {
         switch arSession.mappingState {
         case .idle:
-            EmptyView()
+            manualScanningPanel
         case .scanning:
             scanningPanel
         case .ready:
@@ -124,17 +203,48 @@ struct PortalExperienceView: View {
                     .multilineTextAlignment(.center)
             }
 
-            if arSession.canFinishScanning {
-                Button("Finish Scanning") {
-                    arSession.finishScanning()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-            } else if arSession.authorizationDenied {
+            if arSession.authorizationDenied {
                 Text("Permission denied — enable in Settings")
                     .font(.caption)
                     .foregroundStyle(.red)
             }
+
+            Button("Finish Scanning") {
+                if arSession.canFinishScanning {
+                    arSession.finishScanning()
+                } else {
+                    arSession.finishScanningManually()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+        }
+        .frame(maxWidth: 320)
+        .padding(28)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .padding(.bottom, 40)
+    }
+
+    private var manualScanningPanel: some View {
+        VStack(spacing: 20) {
+            ScanningIndicator()
+
+            VStack(spacing: 6) {
+                Text("Scanning your room...")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+
+                Text("Use manual finish when testing in Simulator.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button("Finish Scanning") {
+                arSession.finishScanningManually()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
         }
         .frame(maxWidth: 320)
         .padding(28)

@@ -84,6 +84,11 @@ final class ARKitSessionManager {
         mappingState = .ready
     }
 
+    func finishScanningManually() {
+        canFinishScanning = true
+        mappingState = .ready
+    }
+
     func reveal() {
         guard mappingState == .ready else { return }
         mappingState = .active
