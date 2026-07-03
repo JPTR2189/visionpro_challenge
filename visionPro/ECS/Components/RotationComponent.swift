@@ -11,7 +11,6 @@ struct RotationComponent: Component {
     var isActive: Bool = false
 
     /// Direções pré-definidas, pra facilitar o uso no HandSphereView
-    
     static let clockwise = Float(-1.2)         /// 69 graus/s (horário)
     static let counterClockwise = Float(1.2)   /// 69 graus/s (anti-horário)
 }

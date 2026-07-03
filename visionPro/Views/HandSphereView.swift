@@ -109,7 +109,6 @@ struct HandSphereView: View {
                        audioController: &debugAudioController,
                        show: shouldAppear, translation: [0, 0, 0])
         }
-        // 🔥 NOVOS onChange: gesto de arremesso detectado
         .onChange(of: handModel.rightThrowTriggered) { _, triggered in
             guard triggered else { return }
             throwFireball(from: rightSphereEntity, direction: handModel.rightThrowDirection)
@@ -125,28 +124,20 @@ struct HandSphereView: View {
         }
     }
 
-    // MARK: - Arremesso 🔥
+    // MARK: - Arremesso
 
-    /// Cria um clone da bola no ponto atual da mão (mas ancorado no MUNDO),
-    /// dá a ele o ProjectileComponent, e o sistema faz o resto:
-    /// movimento constante + destruição após 6 segundos.
+    /// Cria um clone da bola no ponto atual da mão
     private func throwFireball(from handEntity: Entity?, direction: SIMD3<Float>) {
         guard let handEntity, let content = sceneContent else { return }
 
-        // 1. Captura a posição ATUAL da bola em coordenadas de MUNDO
-        //    (a bola está ancorada na mão — precisamos "congelar" onde
-        //     ela está agora, no referencial do mundo)
+  
         let worldPosition = handEntity.position(relativeTo: nil)
 
-        // 2. Cria um clone independente da bola
-        //    (clone(recursive: true) copia toda a hierarquia:
-        //     esfera, material, luzes, partícula de fogo)
+       
         let projectile = handEntity.clone(recursive: true)
 
-        // 3. Remove componentes que não fazem sentido num projétil
         projectile.components.remove(RotationComponent.self)
 
-        // 4. Adiciona o componente de projétil com a direção do gesto
         projectile.components.set(ProjectileComponent(direction: direction))
         
         /// Adiciona componente de colisão na bola de fogo
@@ -155,7 +146,6 @@ struct HandSphereView: View {
                 mode: .trigger
             ))
 
-        // 5. Ancora no MUNDO na posição atual da mão
         let worldAnchor = AnchorEntity(world: worldPosition)
         projectile.position = [0, 0, 0]  // zero relativo ao anchor
         projectile.scale = [targetScale, targetScale, targetScale]
@@ -163,15 +153,11 @@ struct HandSphereView: View {
         worldAnchor.addChild(projectile)
         content.add(worldAnchor)
 
-        // 6. Toca o som no projétil (independente do som da mão)
         if let audioEntity = projectile.findEntity(named: "Sphere"),
            let resource = sharedAudioResource {
             audioEntity.playAudio(resource)
         }
 
-        // 7. Remove a âncora do mundo após o tempo de vida
-        //    (o ProjectileSystem remove a entidade, mas a âncora
-        //     vazia ficaria pra trás sem essa limpeza)
         Task {
             try? await Task.sleep(nanoseconds: 6_500_000_000)
             worldAnchor.removeFromParent()

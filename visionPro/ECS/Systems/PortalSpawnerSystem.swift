@@ -109,8 +109,6 @@ struct PortalSpawnerSystem: System {
         initialTransform.scale = finalTransform.scale * 0.001
         portal.transform = initialTransform
 
-        // O portal é SEMPRE filho da entidade da parede —
-        // garante que ele fique alinhado ao plano dela.
         placement.wall.addChild(portal)
 
         portal.move(
@@ -176,7 +174,6 @@ struct PortalSpawnerSystem: System {
                 let offset = worldPosition - headPosition
                 let distance = simd_length(offset)
 
-                // 🔧 Filtros aplicados conforme o nível de fallback:
                 switch level {
                 case .strict:
                     guard distance >= spawner.minDistance,
@@ -185,7 +182,7 @@ struct PortalSpawnerSystem: System {
                     guard distance >= spawner.minDistance,
                           distance <= spawner.maxDistance else { continue }
                 case .distanceOnly:
-                    // Ignora a distância mínima — aceita paredes próximas
+                    /// Ignora a distância mínima e aceita paredes próximas
                     guard distance <= spawner.maxDistance else { continue }
                 }
 

@@ -19,26 +19,26 @@ struct ContentView: View {
         .frame(width: 380)
         .padding(32)
 
-        // VStack(spacing: 20) {
-        //     Text("Esfera na Mão")
-        //         .font(.largeTitle)
-        //         .bold()
+         VStack(spacing: 20) {
+             Text("Esfera na Mão")
+                 .font(.largeTitle)
+                 .bold()
 
-        //     Text("Toque no botão abaixo para entrar no modo imersivo. Depois, vire a palma da mão direita para cima para fazer a esfera aparecer.")
-        //         .font(.body)
-        //         .foregroundStyle(.secondary)
-        //         .multilineTextAlignment(.center)
-        //         .frame(maxWidth: 420)
+             Text("Toque no botão abaixo para entrar no modo imersivo. Depois, vire a palma da mão direita para cima para fazer a esfera aparecer.")
+                 .font(.body)
+                 .foregroundStyle(.secondary)
+                 .multilineTextAlignment(.center)
+                 .frame(maxWidth: 420)
 
-        //     ToggleImmersiveSpaceButton()
+             ToggleImmersiveSpaceButton()
 
-        //     // Botão de DEBUG
-        //     Button("🧪 Forçar esfera aparecer (debug)") {
-        //         appModel.debugForceShow.toggle()
-        //     }
-        //     .font(.caption)
-        // }
-        // .padding(40)
+             // Botão de DEBUG
+             Button("🧪 Forçar esfera aparecer (debug)") {
+                 appModel.debugForceShow.toggle()
+             }
+             .font(.caption)
+         }
+         .padding(40)
     }
 }
 

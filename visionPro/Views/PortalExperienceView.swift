@@ -15,18 +15,27 @@ struct PortalExperienceView: View {
     @State private var wallEntities = [UUID: Entity]()
     @State private var portalTemplate: Entity?
 
-    // ── Bola de fogo (hand tracking) ──
+    /// Tracking das mãos
     @State private var handModel = HandTrackingModel()
+    
+    /// Entidades bola de fogo
     @State private var rightSphereEntity: Entity?
     @State private var leftSphereEntity: Entity?
+    
+    /// Controlador de áudio
     @State private var rightAudioController: AudioPlaybackController?
     @State private var leftAudioController: AudioPlaybackController?
+    
+    /// Entidade do áudio das bolas de fogo
     @State private var rightAudioEntity: Entity?
     @State private var leftAudioEntity: Entity?
+    
     @State private var sharedAudioResource: AudioFileResource?
 
-    // ── Colisões ──
+    /// Adiciona o handler de colisão das bolas de fogo
     @State private var collisionHandler = CollisionHandler()
+    
+    /// Aramzena o conteúdo da cena do RealityKit
     @State private var sceneContent: RealityViewContent?
 
     private let targetScale: Float = 0.15
@@ -38,7 +47,7 @@ struct PortalExperienceView: View {
             sceneContent = content
             content.add(sceneRoot)
 
-            // 🔥 Observador de colisões — bola × portal, bola × ambiente real
+            /// Observador das colisões
             collisionHandler.subscribe(to: content)
 
             if let uiEntity = attachments.entity(for: "MappingUI") {
@@ -48,7 +57,7 @@ struct PortalExperienceView: View {
                 content.add(uiEntity)
             }
 
-            // ── Áudio compartilhado da bola de fogo ──
+            /// Áudio compartilhado para as bolas de fogos
             if let resource = try? await AudioFileResource(
                 named: "/Root/Sphere/FireSpatialAudio/fireSound",
                 from: "FireBall.usda",
@@ -203,8 +212,7 @@ struct PortalExperienceView: View {
 
         wallEntity.setTransformMatrix(worldFromExtent, relativeTo: nil)
 
-        // 🔒 O componente que o PortalSpawnerSystem procura —
-        // só paredes classificadas chegam até aqui (guard acima).
+        
         wallEntity.components.set(
             WallSurfaceComponent(
                 width: extent.width,
@@ -260,8 +268,7 @@ struct PortalExperienceView: View {
         spawner.referenceTransform = referenceTransform
         spawner.lastSpawnTime = 0
 
-        // Clamp do portalSize: um modelo grande demais exigiria
-        // paredes gigantes e nenhuma passaria no filtro de espaço.
+        
         let bounds = portalTemplate.visualBounds(relativeTo: nil)
         if bounds.extents.x > 0.001, bounds.extents.y > 0.001 {
             let maxPortalWidth: Float = 1.2
@@ -310,9 +317,7 @@ struct PortalExperienceView: View {
         sceneRoot.addChild(entity)
         meshEntities[anchor.id] = entity
 
-        // 🔥 Colisão com o ambiente real — só APÓS o reveal (isFinal).
-        // Gerar static mesh durante o scanning seria caro à toa
-        // (a malha ainda está sendo refinada e não há projéteis voando).
+        
         if isFinal {
             entity.components.set(EnvironmentMeshComponent())
 
@@ -341,8 +346,7 @@ struct PortalExperienceView: View {
                 audioController = audioEntity.playAudio(resource)
             }
 
-            // Rotação SÓ após a animação de scale terminar
-            // (evita o RotationSystem cancelar o entity.move em andamento)
+            
             Task {
                 try? await Task.sleep(nanoseconds: animationDuration)
                 setRotation(on: entity, active: true)
@@ -386,25 +390,19 @@ struct PortalExperienceView: View {
     private func throwFireball(from handEntity: Entity?, direction: SIMD3<Float>) {
         guard let handEntity, let content = sceneContent else { return }
 
-        // 1. Posição atual da bola em coordenadas de MUNDO
         let worldPosition = handEntity.position(relativeTo: nil)
 
-        // 2. Clone independente (hierarquia completa: fogo, luzes, som)
         let projectile = handEntity.clone(recursive: true)
 
-        // 3. Remove o que não faz sentido num projétil
         projectile.components.remove(RotationComponent.self)
 
-        // 4. Componente de projétil (direção do gesto)
         projectile.components.set(ProjectileComponent(direction: direction))
 
-        // 5. Forma de colisão do projétil
         projectile.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: 0.05)],
             mode: .trigger
         ))
 
-        // 6. Ancora no MUNDO na posição atual da mão
         let worldAnchor = AnchorEntity(world: worldPosition)
         projectile.position = [0, 0, 0]
         projectile.scale = [targetScale, targetScale, targetScale]
@@ -412,14 +410,12 @@ struct PortalExperienceView: View {
         worldAnchor.addChild(projectile)
         content.add(worldAnchor)
 
-        // 7. Som próprio do projétil
         if let audioEntity = projectile.findEntity(named: "Sphere"),
            let resource = sharedAudioResource {
             audioEntity.playAudio(resource)
         }
 
-        // 8. Limpa a âncora após o tempo de vida (o ProjectileSystem
-        //    remove a entidade, mas a âncora vazia ficaria pra trás)
+        
         Task {
             try? await Task.sleep(nanoseconds: 6_500_000_000)
             worldAnchor.removeFromParent()

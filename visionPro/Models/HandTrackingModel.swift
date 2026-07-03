@@ -10,33 +10,38 @@ final class HandTrackingModel {
     private let session = ARKitSession()
     private let handTracking = HandTrackingProvider()
 
-    /// Estado da mão DIREITA
+    /// Estado visual da mão DIREITA
     var rightPalmIsFacingUp = false
     var rightSphereShouldAppear = false
     private var rightConsecutiveFramesUp = 0
 
-    /// Estado da mão ESQUERDA
+    /// Estado visual da mão ESQUERDA
     var leftPalmIsFacingUp = false
     var leftSphereShouldAppear = false
     private var leftConsecutiveFramesUp = 0
 
-    // Gesto de arremesso
+    /// Estado da bola de fogo na mão
+    private var rightSphereIsHeld = false
+    private var leftSphereIsHeld = false
+    private var rightFramesSinceUp = 0
+    private var leftFramesSinceUp = 0
+
+    /// Gesto de arremesso (palma virando pra frente)
     var rightThrowTriggered = false
     var leftThrowTriggered = false
-
-    /// Direção para lançar a bola de fogo
     var rightThrowDirection: SIMD3<Float> = [0, 0, -1]
     var leftThrowDirection: SIMD3<Float> = [0, 0, -1]
-
     private var rightConsecutiveFramesForward = 0
     private var leftConsecutiveFramesForward = 0
 
-    /// Limite de frames seguidos com ruído que podem ser tolerados
+    /// Limite de frames com ruído tolerados antes de esconder a esfera
     private let toleratedBadFrames = 5
-    /// Quantidade de frames corretos para exibir a esfera
+    /// Frames corretos necessários para exibir a esfera (visual)
     private let framesToConfirm = 10
-    /// Frames para confirmar o gesto de arremesso (menor que framesToConfirm)
+    /// Frames para confirmar o arremesso
     private let framesToConfirmThrow = 5
+    /// Tolerância para movimento de lançar bola de fogo
+    private let framesToAbandonHold = 30
 
     func start() async {
         guard HandTrackingProvider.isSupported else {
@@ -45,7 +50,7 @@ final class HandTrackingModel {
         }
 
         do {
-            try await session.run([handTracking])
+            try await session.run([handTracking]) /// Liga o sensor de tracking
         } catch {
             print("Erro ao iniciar hand tracking: \(error)")
             return
@@ -73,12 +78,10 @@ final class HandTrackingModel {
         )
         let normalizedPalm = normalize(palmNormal)
 
-        // MARK: Surgimento da bola de fogo (palma para cima)
         let worldUp = SIMD3<Float>(0, 1, 0)
         let upAlignment = dot(normalizedPalm, worldUp)
         let isUp = upAlignment > 0.75
 
-        // MARK: Arremesso da bola de fogo (palma para frente)
         let horizontalComponent = SIMD3<Float>(normalizedPalm.x, 0, normalizedPalm.z)
         let horizontalMagnitude = length(horizontalComponent)
         let isForward = horizontalMagnitude > 0.8 && upAlignment < 0.4
@@ -88,30 +91,55 @@ final class HandTrackingModel {
             case .right:
                 rightPalmIsFacingUp = isUp
                 updateDebounced(isUp, consecutiveFrames: &rightConsecutiveFramesUp) { rightSphereShouldAppear = $0 }
+
+                /// Sobe instantaneamente ao ver a palma pra cima, detectando o arremesso
+
+                if isUp {
+                    rightFramesSinceUp = 0
+                    rightSphereIsHeld = true
+                } else {
+                    rightFramesSinceUp += 1
+                    if rightFramesSinceUp > framesToAbandonHold {
+                        rightSphereIsHeld = false
+                    }
+                }
+
                 updateThrowDetection(
                     isForward: isForward,
-                    sphereIsActive: rightSphereShouldAppear,
+                    sphereIsActive: rightSphereIsHeld,
                     direction: normalize(horizontalComponent),
                     consecutiveFrames: &rightConsecutiveFramesForward
                 ) { direction in
                     rightThrowDirection = direction
                     rightThrowTriggered = true
-                    // Esconde a esfera da mão (ela virou projétil)
                     rightSphereShouldAppear = false
+                    rightSphereIsHeld = false
                     rightConsecutiveFramesUp = 0
                 }
             case .left:
                 leftPalmIsFacingUp = isUp
                 updateDebounced(isUp, consecutiveFrames: &leftConsecutiveFramesUp) { leftSphereShouldAppear = $0 }
+
+                if isUp {
+                    leftFramesSinceUp = 0
+                    leftSphereIsHeld = true
+                } else {
+                    leftFramesSinceUp += 1
+                    if leftFramesSinceUp > framesToAbandonHold {
+                        leftSphereIsHeld = false
+                    }
+                }
+
                 updateThrowDetection(
                     isForward: isForward,
-                    sphereIsActive: leftSphereShouldAppear,
+                    sphereIsActive: leftSphereIsHeld,
                     direction: normalize(horizontalComponent),
                     consecutiveFrames: &leftConsecutiveFramesForward
                 ) { direction in
                     leftThrowDirection = direction
                     leftThrowTriggered = true
                     leftSphereShouldAppear = false
+                    leftSphereIsHeld = false
                     leftConsecutiveFramesUp = 0
                 }
             @unknown default:
@@ -120,7 +148,6 @@ final class HandTrackingModel {
         }
     }
 
-    /// Reseta o gatilho de arremesso depois de processar o lançamento, para permitir novos arremessos.
     func resetThrowTrigger(isRight: Bool) {
         if isRight {
             rightThrowTriggered = false
@@ -139,7 +166,6 @@ final class HandTrackingModel {
         apply(consecutiveFrames > framesToConfirm)
     }
 
-    /// Detecção do gesto de arremesso (garante que a bola já está na mão)
     private func updateThrowDetection(isForward: Bool,
                                       sphereIsActive: Bool,
                                       direction: SIMD3<Float>,
