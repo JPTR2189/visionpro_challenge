@@ -81,10 +81,21 @@ final class HandTrackingModel {
         let worldUp = SIMD3<Float>(0, 1, 0)
         let upAlignment = dot(normalizedPalm, worldUp)
         let isUp = upAlignment > 0.75
+        
+        /// Direção do arremesso da bola de fogo
+        let horizontalComponent = SIMD3<Float>(
+        normalizedPalm.x,
+        0,
+        normalizedPalm.z
+    )
 
-        let horizontalComponent = SIMD3<Float>(normalizedPalm.x, 0, normalizedPalm.z)
         let horizontalMagnitude = length(horizontalComponent)
-        let isForward = horizontalMagnitude > 0.8 && upAlignment < 0.4
+        let isForward = horizontalMagnitude > 0.8 && abs(upAlignment) < 0.4
+
+        let throwDirection: SIMD3<Float> = isForward
+            ? normalize(horizontalComponent)
+            : .zero
+        
 
         await MainActor.run {
             switch handAnchor.chirality {
@@ -107,9 +118,11 @@ final class HandTrackingModel {
                 updateThrowDetection(
                     isForward: isForward,
                     sphereIsActive: rightSphereIsHeld,
-                    direction: normalize(horizontalComponent),
+                    direction: throwDirection,
                     consecutiveFrames: &rightConsecutiveFramesForward
                 ) { direction in
+                    print("🧭 [DIREITA] throwDirection detectado")
+                    print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
                     rightThrowDirection = direction
                     rightThrowTriggered = true
                     rightSphereShouldAppear = false
@@ -133,9 +146,13 @@ final class HandTrackingModel {
                 updateThrowDetection(
                     isForward: isForward,
                     sphereIsActive: leftSphereIsHeld,
-                    direction: normalize(horizontalComponent),
+                    direction: throwDirection,
                     consecutiveFrames: &leftConsecutiveFramesForward
                 ) { direction in
+                    print("---DEBUG DIRECTION---")
+                    print("🧭 [ESQUERDA] throwDirection detectado")
+                    print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
+                    print("-------------------------")
                     leftThrowDirection = direction
                     leftThrowTriggered = true
                     leftSphereShouldAppear = false

@@ -24,8 +24,14 @@ class ProjectileSystem: System {
 
             /// Movimento constante na direção do arremesso
             /// deslocamento = direção × velocidade × tempo do frame
-            let displacement = projectile.direction * projectile.speed * deltaTime
-            entity.position += displacement
+            let direction = normalize(projectile.direction)
+            let displacement = direction * projectile.speed * deltaTime
+
+            let currentWorldPosition = entity.position(relativeTo: nil)
+            entity.setPosition(
+                currentWorldPosition + displacement,
+                relativeTo: nil
+            )
         }
     }
 }

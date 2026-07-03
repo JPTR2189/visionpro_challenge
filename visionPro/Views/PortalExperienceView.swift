@@ -388,27 +388,50 @@ struct PortalExperienceView: View {
     /// Clona a bola no ponto atual da mão, ancora no MUNDO (não segue
     /// mais a mão), e entrega ao ProjectileSystem (movimento + 6s de vida).
     private func throwFireball(from handEntity: Entity?, direction: SIMD3<Float>) {
+        print("---DEBUG FIREBALL CALLER---")
+        print("   direction recebida: x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
+        print("   worldPos da mão:    \(handEntity?.position(relativeTo: nil) ?? .zero)")
         guard let handEntity, let content = sceneContent else { return }
 
-        let worldPosition = handEntity.position(relativeTo: nil)
+        guard length(direction) > 0.001 else {
+            print("⚠️ throwFireball: direção inválida.")
+            return
+        }
+
+        let launchDirection = normalize(direction)
+        let handWorldPosition = handEntity.position(relativeTo: nil)
+        let spawnPosition = handWorldPosition + launchDirection * 0.12
+
 
         let projectile = handEntity.clone(recursive: true)
 
         projectile.components.remove(RotationComponent.self)
 
-        projectile.components.set(ProjectileComponent(direction: direction))
+        projectile.components.set(ProjectileComponent(direction: launchDirection))
 
-        projectile.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: 0.05)],
-            mode: .trigger
-        ))
-
-        let worldAnchor = AnchorEntity(world: worldPosition)
+        let worldAnchor = AnchorEntity(world: spawnPosition)
         projectile.position = [0, 0, 0]
         projectile.scale = [targetScale, targetScale, targetScale]
         projectile.isEnabled = true
+        
         worldAnchor.addChild(projectile)
         content.add(worldAnchor)
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+
+            guard projectile.parent != nil,
+                  projectile.components.has(ProjectileComponent.self) else {
+                return
+            }
+
+            projectile.components.set(
+                CollisionComponent(
+                    shapes: [.generateSphere(radius: 0.05)],
+                    mode: .trigger
+                )
+            )
+        }
 
         if let audioEntity = projectile.findEntity(named: "Sphere"),
            let resource = sharedAudioResource {
