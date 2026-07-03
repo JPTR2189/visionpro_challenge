@@ -24,7 +24,7 @@ struct ImmersiveView: View {
             startNewRound(in: scene)
         }
         .gesture(
-            SpatialTapGesture()
+            TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
                     handleRuneTap(value.entity)

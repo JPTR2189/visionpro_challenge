@@ -89,11 +89,6 @@ enum PortalExperience {
     }
 
     static func rockName(containing entity: Entity) -> String? {
-        let selectedEntityName = entity.name.uppercased()
-        if selectedEntityName.hasPrefix(runeHitTargetNamePrefix) {
-            return selectedEntityName.replacingOccurrences(of: runeHitTargetNamePrefix, with: "")
-        }
-
         var current: Entity? = entity
 
         while let entity = current {
@@ -327,12 +322,14 @@ enum PortalExperience {
 
     private static func configureRuntimePortalLights(in portal: Entity) {
         for rune in runeLightBindings {
+            let lightPosition = runtimeLightPosition(for: rune, in: portal)
+
             addRuntimePointLight(
                 named: rune.purpleLightName,
                 red: 0.58,
                 green: 0.16,
                 blue: 1.0,
-                position: rune.lightPosition,
+                position: lightPosition,
                 to: portal
             )
             addRuntimePointLight(
@@ -340,10 +337,18 @@ enum PortalExperience {
                 red: 1.0,
                 green: 0.08,
                 blue: 0.04,
-                position: rune.lightPosition,
+                position: lightPosition,
                 to: portal
             )
         }
+    }
+
+    private static func runtimeLightPosition(for rune: RuneLightBinding, in portal: Entity) -> SIMD3<Float> {
+        guard let stone = portal.findEntity(named: rune.rockName) else {
+            return rune.lightPosition
+        }
+
+        return stone.visualBounds(relativeTo: portal).center
     }
 
     private static func addRuntimePointLight(
@@ -376,7 +381,6 @@ enum PortalExperience {
 
         for (index, stone) in floatingStones.enumerated() {
             configureStoneInteraction(on: stone)
-            addRuneHitTarget(for: stone, to: portal)
 
             stone.components.set(
                 PortalFloatingStoneComponent(
@@ -393,42 +397,20 @@ enum PortalExperience {
         }
     }
 
-    private static func addRuneHitTarget(for stone: Entity, to portal: Entity) {
-        let rockName = stone.name.uppercased()
-        let hitTargetName = runeHitTargetName(for: rockName)
-        guard floatingStoneNames.contains(rockName),
-              portal.findEntity(named: hitTargetName) == nil else {
-            return
-        }
-
-        let hitTarget = Entity()
-        hitTarget.name = hitTargetName
-        hitTarget.position = [0, 0, runeHitTargetForwardOffset]
-        hitTarget.components.set(InputTargetComponent(allowedInputTypes: .indirect))
-        hitTarget.components.set(HoverEffectComponent())
-        hitTarget.components.set(
-            CollisionComponent(
-                shapes: [.generateSphere(radius: runeHitTargetRadius)]
-            )
-        )
-        stone.addChild(hitTarget)
-    }
-
     private static func configureStoneInteraction(on stone: Entity) {
         let bounds = stone.visualBounds(relativeTo: stone)
         let radius = max(bounds.extents.x, bounds.extents.y, bounds.extents.z) * 0.62
+        let shape = ShapeResource
+            .generateSphere(radius: max(radius, 0.12))
+            .offsetBy(translation: bounds.center)
 
         stone.components.set(InputTargetComponent(allowedInputTypes: .indirect))
         stone.components.set(HoverEffectComponent())
         stone.components.set(
             CollisionComponent(
-                shapes: [.generateSphere(radius: max(radius, 0.12))]
+                shapes: [shape]
             )
         )
-    }
-
-    private static func runeHitTargetName(for rockName: String) -> String {
-        "\(runeHitTargetNamePrefix)\(rockName.uppercased())"
     }
 
     private static func collectFloatingStones(from entity: Entity, into result: inout [Entity]) {
@@ -453,10 +435,6 @@ enum PortalExperience {
         "ROCK_G",
         "ROCK_H"
     ]
-
-    private static let runeHitTargetNamePrefix = "RUNEHITTARGET_"
-    private static let runeHitTargetRadius: Float = 0.46
-    private static let runeHitTargetForwardOffset: Float = 0.9
 
     private static func addPortalPlaceholder(to root: Entity) {
         var centerMaterial = UnlitMaterial()
