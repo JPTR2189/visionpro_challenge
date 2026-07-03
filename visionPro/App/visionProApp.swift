@@ -6,8 +6,12 @@ struct visionProApp: App {
 
     @State private var appModel = AppModel()
 
+    init() {
+        PortalRuneVisualSystem.registerRealityKitContent()
+    }
+
     var body: some SwiftUI.Scene {
-        WindowGroup {
+        WindowGroup(id: "MainWindow") {
             ContentView()
                 .environment(appModel)
         }

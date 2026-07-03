@@ -4,6 +4,7 @@ struct TogglePortalSpaceButton: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.dismissWindow)         private var dismissWindow
     @Environment(\.openImmersiveSpace)    private var openImmersiveSpace
 
     var body: some View {
@@ -18,7 +19,7 @@ struct TogglePortalSpaceButton: View {
                     appModel.portalSpaceState = .inTransition
                     switch await openImmersiveSpace(id: appModel.portalSpaceID) {
                     case .opened:
-                        break
+                        dismissWindow(id: "MainWindow")
                     case .userCancelled, .error:
                         fallthrough
                     @unknown default:
