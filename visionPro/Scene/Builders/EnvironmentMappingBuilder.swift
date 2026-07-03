@@ -1,3 +1,8 @@
+//
+//  EnvironmentMappingBuilder.swift
+//  visionPro
+//
+
 import ARKit
 import RealityKit
 import UIKit
@@ -49,7 +54,6 @@ enum EnvironmentMappingBuilder {
         ) {
             root.addChild(floorEntity)
         }
-
 
         if let occlusionEntity = makeSubEntity(
             vertices: allVertices,
@@ -129,3 +133,4 @@ enum EnvironmentMappingBuilder {
         return mat
     }
 }
+

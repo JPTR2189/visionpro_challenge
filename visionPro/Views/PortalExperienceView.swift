@@ -1,9 +1,11 @@
 import SwiftUI
 import RealityKit
+import RealityKitContent
 import ARKit
 
 struct PortalExperienceView: View {
 
+    //
     @State private var arSession  = ARKitSessionManager()
     @State private var sceneRoot  = Entity()
     @State private var wallMaterial: (any RealityKit.Material)?
@@ -13,15 +15,80 @@ struct PortalExperienceView: View {
     @State private var wallEntities = [UUID: Entity]()
     @State private var portalTemplate: Entity?
 
+    // ── Bola de fogo (hand tracking) ──
+    @State private var handModel = HandTrackingModel()
+    @State private var rightSphereEntity: Entity?
+    @State private var leftSphereEntity: Entity?
+    @State private var rightAudioController: AudioPlaybackController?
+    @State private var leftAudioController: AudioPlaybackController?
+    @State private var rightAudioEntity: Entity?
+    @State private var leftAudioEntity: Entity?
+    @State private var sharedAudioResource: AudioFileResource?
+
+    // ── Colisões ──
+    @State private var collisionHandler = CollisionHandler()
+    @State private var sceneContent: RealityViewContent?
+
+    private let targetScale: Float = 0.15
+    private let palmOffset: SIMD3<Float> = [0, 0.1, 0]
+    private let animationDuration: UInt64 = 350_000_000
+
     var body: some View {
         RealityView { content, attachments in
+            sceneContent = content
             content.add(sceneRoot)
+
+            // 🔥 Observador de colisões — bola × portal, bola × ambiente real
+            collisionHandler.subscribe(to: content)
+
             if let uiEntity = attachments.entity(for: "MappingUI") {
-                // Ancorado ao content (espaço imersivo) e não ao sceneRoot
-                // para que apareça à frente do usuário no momento de entrada
+                // Ancorado ao content (não ao sceneRoot) para aparecer
+                // à frente do usuário no momento de entrada
                 uiEntity.position = [0, 1.6, -1.0]
                 content.add(uiEntity)
             }
+
+            // ── Áudio compartilhado da bola de fogo ──
+            if let resource = try? await AudioFileResource(
+                named: "/Root/Sphere/FireSpatialAudio/fireSound",
+                from: "FireBall.usda",
+                in: realityKitContentBundle
+            ) {
+                sharedAudioResource = resource
+            } else {
+                print("⚠️ Não consegui carregar o áudio da FireBall.")
+            }
+
+            // ── Bola de fogo: mão DIREITA (rotação horária) ──
+            if let rightFireBall = try? await Entity(named: "FireBall", in: realityKitContentBundle) {
+                let rightAnchor = AnchorEntity(.hand(.right, location: .palm))
+                rightFireBall.scale = [0.001, 0.001, 0.001]
+                rightFireBall.position = palmOffset
+                rightFireBall.components.set(RotationComponent(angularSpeed: RotationComponent.clockwise))
+                rightFireBall.isEnabled = false
+                rightAnchor.addChild(rightFireBall)
+                content.add(rightAnchor)
+                rightSphereEntity = rightFireBall
+                rightAudioEntity = rightFireBall.findEntity(named: "Sphere")
+            } else {
+                print("❌ FireBall (direita) não carregou.")
+            }
+
+            // ── Bola de fogo: mão ESQUERDA (rotação anti-horária) ──
+            if let leftFireBall = try? await Entity(named: "FireBall", in: realityKitContentBundle) {
+                let leftAnchor = AnchorEntity(.hand(.left, location: .palm))
+                leftFireBall.scale = [0.001, 0.001, 0.001]
+                leftFireBall.position = palmOffset
+                leftFireBall.components.set(RotationComponent(angularSpeed: RotationComponent.counterClockwise))
+                leftFireBall.isEnabled = false
+                leftAnchor.addChild(leftFireBall)
+                content.add(leftAnchor)
+                leftSphereEntity = leftFireBall
+                leftAudioEntity = leftFireBall.findEntity(named: "Sphere")
+            } else {
+                print("❌ FireBall (esquerda) não carregou.")
+            }
+
         } attachments: {
             Attachment(id: "MappingUI") {
                 mappingOverlay
@@ -35,6 +102,27 @@ struct PortalExperienceView: View {
         .task { await processMeshUpdates() }
         .task { await processWallUpdates() }
         .task { await preparePortalTemplate() }
+        .task { await handModel.start() }
+        // ── Gestos: bola aparece/some na mão ──
+        .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in
+            showFireball(rightSphereEntity, audioEntity: rightAudioEntity,
+                         audioController: &rightAudioController, show: shouldAppear)
+        }
+        .onChange(of: handModel.leftSphereShouldAppear) { _, shouldAppear in
+            showFireball(leftSphereEntity, audioEntity: leftAudioEntity,
+                         audioController: &leftAudioController, show: shouldAppear)
+        }
+        // ── Gestos: arremesso ──
+        .onChange(of: handModel.rightThrowTriggered) { _, triggered in
+            guard triggered else { return }
+            throwFireball(from: rightSphereEntity, direction: handModel.rightThrowDirection)
+            handModel.resetThrowTrigger(isRight: true)
+        }
+        .onChange(of: handModel.leftThrowTriggered) { _, triggered in
+            guard triggered else { return }
+            throwFireball(from: leftSphereEntity, direction: handModel.leftThrowDirection)
+            handModel.resetThrowTrigger(isRight: false)
+        }
         .onDisappear {
             arSession.stop()
         }
@@ -60,7 +148,7 @@ struct PortalExperienceView: View {
                 // Só (re)cria a entidade se ainda não aplicamos as texturas finais,
                 // evitando sobrescrever o material definitivo com o de escaneamento.
                 if arSession.mappingState != .active {
-                    refreshMeshEntity(for: update.anchor)
+                    await refreshMeshEntity(for: update.anchor)
                 }
             case .removed:
                 arSession.removeMeshAnchor(id: update.anchor.id)
@@ -70,7 +158,7 @@ struct PortalExperienceView: View {
         }
     }
 
-    // MARK: - Plane Tracking: cria superficies ECS apenas para paredes
+    // MARK: - Plane Tracking: cria superfícies ECS apenas para paredes
 
     @MainActor
     private func processWallUpdates() async {
@@ -78,7 +166,6 @@ struct PortalExperienceView: View {
             switch update.event {
             case .added, .updated:
                 refreshWallEntity(for: update.anchor)
-
             case .removed:
                 removeWallEntity(id: update.anchor.id)
             }
@@ -90,12 +177,10 @@ struct PortalExperienceView: View {
         switch anchor.surfaceClassification {
         case .wall:
             break
-
         case .none:
-            // Durante o refinamento a classificacao pode ficar temporariamente
-            // indisponivel. Mantem uma parede que ja foi reconhecida.
+            // Durante o refinamento a classificação pode ficar temporariamente
+            // indisponível. Mantém uma parede que já foi reconhecida.
             return
-
         default:
             removeWallEntity(id: anchor.id)
             return
@@ -117,6 +202,9 @@ struct PortalExperienceView: View {
             * extent.anchorFromExtentTransform
 
         wallEntity.setTransformMatrix(worldFromExtent, relativeTo: nil)
+
+        // 🔒 O componente que o PortalSpawnerSystem procura —
+        // só paredes classificadas chegam até aqui (guard acima).
         wallEntity.components.set(
             WallSurfaceComponent(
                 width: extent.width,
@@ -147,7 +235,10 @@ struct PortalExperienceView: View {
 
     @MainActor
     private func enablePortalSpawning() async {
-        guard let portalTemplate else { return }
+        guard let portalTemplate else {
+            print("❌ enablePortalSpawning abortado: portalTemplate é nil.")
+            return
+        }
 
         var referenceTransform: simd_float4x4?
 
@@ -160,7 +251,7 @@ struct PortalExperienceView: View {
         }
 
         guard let referenceTransform else {
-            print("❌ Nao foi possivel obter a pose do Vision Pro para iniciar os portais.")
+            print("❌ Não foi possível obter a pose do Vision Pro para iniciar os portais.")
             return
         }
 
@@ -169,15 +260,22 @@ struct PortalExperienceView: View {
         spawner.referenceTransform = referenceTransform
         spawner.lastSpawnTime = 0
 
+        // Clamp do portalSize: um modelo grande demais exigiria
+        // paredes gigantes e nenhuma passaria no filtro de espaço.
         let bounds = portalTemplate.visualBounds(relativeTo: nil)
         if bounds.extents.x > 0.001, bounds.extents.y > 0.001 {
+            let maxPortalWidth: Float = 1.2
+            let maxPortalHeight: Float = 1.8
             spawner.portalSize = SIMD2<Float>(
-                bounds.extents.x,
-                bounds.extents.y
+                min(bounds.extents.x, maxPortalWidth),
+                min(bounds.extents.y, maxPortalHeight)
             )
+            print("📐 portalSize configurado: \(spawner.portalSize) " +
+                  "(medido: \(bounds.extents.x)×\(bounds.extents.y))")
         }
 
         sceneRoot.components.set(spawner)
+        print("🌀 Spawner de portais ativado. Aguardando paredes válidas...")
     }
 
     // MARK: - Reveal: instância todos os anchors coletados de uma vez
@@ -186,17 +284,16 @@ struct PortalExperienceView: View {
     private func revealEnvironment() {
         arSession.reveal()
 
-        for anchor in arSession.scannedMeshAnchors.values {
-            refreshMeshEntity(for: anchor)
-        }
-
         Task {
+            for anchor in arSession.scannedMeshAnchors.values {
+                await refreshMeshEntity(for: anchor)
+            }
             await enablePortalSpawning()
         }
     }
 
     @MainActor
-    private func refreshMeshEntity(for anchor: MeshAnchor) {
+    private func refreshMeshEntity(for anchor: MeshAnchor) async {
         meshEntities[anchor.id]?.removeFromParent()
 
         let isFinal = (arSession.mappingState == .active)
@@ -212,6 +309,121 @@ struct PortalExperienceView: View {
 
         sceneRoot.addChild(entity)
         meshEntities[anchor.id] = entity
+
+        // 🔥 Colisão com o ambiente real — só APÓS o reveal (isFinal).
+        // Gerar static mesh durante o scanning seria caro à toa
+        // (a malha ainda está sendo refinada e não há projéteis voando).
+        if isFinal {
+            entity.components.set(EnvironmentMeshComponent())
+
+            if let shape = try? await ShapeResource.generateStaticMesh(from: anchor) {
+                entity.components.set(CollisionComponent(
+                    shapes: [shape],
+                    mode: .trigger   // detecta contato, sem física de empurrão
+                ))
+            } else {
+                print("⚠️ Não consegui gerar forma de colisão para o anchor \(anchor.id).")
+            }
+        }
+    }
+
+    // MARK: - Bola de fogo na mão
+
+    private func showFireball(_ entity: Entity?,
+                              audioEntity: Entity?,
+                              audioController: inout AudioPlaybackController?,
+                              show: Bool) {
+        if show {
+            entity?.isEnabled = true
+            animate(entity, show: true)
+
+            if let audioEntity, let resource = sharedAudioResource {
+                audioController = audioEntity.playAudio(resource)
+            }
+
+            // Rotação SÓ após a animação de scale terminar
+            // (evita o RotationSystem cancelar o entity.move em andamento)
+            Task {
+                try? await Task.sleep(nanoseconds: animationDuration)
+                setRotation(on: entity, active: true)
+            }
+        } else {
+            setRotation(on: entity, active: false)
+            audioController?.stop()
+            audioController = nil
+            animate(entity, show: false)
+
+            Task {
+                try? await Task.sleep(nanoseconds: animationDuration)
+                entity?.isEnabled = false
+            }
+        }
+    }
+
+    private func animate(_ entity: Entity?, show: Bool) {
+        guard let entity else { return }
+        let scale = show ? targetScale : Float(0.001)
+        entity.move(
+            to: Transform(scale: [scale, scale, scale], translation: palmOffset),
+            relativeTo: entity.parent,
+            duration: 0.3,
+            timingFunction: .easeInOut
+        )
+    }
+
+    private func setRotation(on entity: Entity?, active: Bool) {
+        guard let entity else { return }
+        if var component = entity.components[RotationComponent.self] {
+            component.isActive = active
+            entity.components.set(component)
+        }
+    }
+
+    // MARK: - Arremesso
+
+    /// Clona a bola no ponto atual da mão, ancora no MUNDO (não segue
+    /// mais a mão), e entrega ao ProjectileSystem (movimento + 6s de vida).
+    private func throwFireball(from handEntity: Entity?, direction: SIMD3<Float>) {
+        guard let handEntity, let content = sceneContent else { return }
+
+        // 1. Posição atual da bola em coordenadas de MUNDO
+        let worldPosition = handEntity.position(relativeTo: nil)
+
+        // 2. Clone independente (hierarquia completa: fogo, luzes, som)
+        let projectile = handEntity.clone(recursive: true)
+
+        // 3. Remove o que não faz sentido num projétil
+        projectile.components.remove(RotationComponent.self)
+
+        // 4. Componente de projétil (direção do gesto)
+        projectile.components.set(ProjectileComponent(direction: direction))
+
+        // 5. Forma de colisão do projétil
+        projectile.components.set(CollisionComponent(
+            shapes: [.generateSphere(radius: 0.05)],
+            mode: .trigger
+        ))
+
+        // 6. Ancora no MUNDO na posição atual da mão
+        let worldAnchor = AnchorEntity(world: worldPosition)
+        projectile.position = [0, 0, 0]
+        projectile.scale = [targetScale, targetScale, targetScale]
+        projectile.isEnabled = true
+        worldAnchor.addChild(projectile)
+        content.add(worldAnchor)
+
+        // 7. Som próprio do projétil
+        if let audioEntity = projectile.findEntity(named: "Sphere"),
+           let resource = sharedAudioResource {
+            audioEntity.playAudio(resource)
+        }
+
+        // 8. Limpa a âncora após o tempo de vida (o ProjectileSystem
+        //    remove a entidade, mas a âncora vazia ficaria pra trás)
+        Task {
+            try? await Task.sleep(nanoseconds: 6_500_000_000)
+            worldAnchor.removeFromParent()
+        }
     }
 
     // MARK: - UI

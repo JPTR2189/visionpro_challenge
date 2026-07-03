@@ -4,13 +4,18 @@ import RealityKitContent
 @MainActor
 enum PortalTemplateFactory {
 
-    /// Carrega o modelo. Se quiser manter o comportamento 100% original (sem escala),
-    /// comente o bloco de escala abaixo.
+    /// Carrega o modelo do portal do bundle do RealityKitContent.
     static func makeTemplate(targetHeight: Float?, attachingTo sceneRoot: Entity) async -> Entity? {
         guard let portal = try? await Entity(named: "Portal", in: realityKitContentBundle) else {
-            print("❌ Erro ao carregar entity 'Portal'.")
+            print("""
+            ❌ Não foi possível carregar a entity 'Portal'.
+               Verifique no Reality Composer Pro se a cena se chama exatamente 'Portal'
+               (Portal.usda) dentro do pacote RealityKitContent.
+            """)
             return nil
         }
+
+        print("✅ Template 'Portal' carregado com sucesso.")
 
         if let targetHeight {
             sceneRoot.addChild(portal)

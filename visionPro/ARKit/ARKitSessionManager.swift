@@ -33,6 +33,7 @@ final class ARKitSessionManager {
 
     private let session             = ARKitSession()
     private let roomTracking        = RoomTrackingProvider()
+
     private let sceneReconstruction = SceneReconstructionProvider(modes: [.classification])
     private let planeDetection      = PlaneDetectionProvider(alignments: [.vertical])
     private let worldTracking       = WorldTrackingProvider()
@@ -59,6 +60,7 @@ final class ARKitSessionManager {
               PlaneDetectionProvider.isSupported,
               WorldTrackingProvider.isSupported else { return }
 
+        /// Reconstrução da cena
         let authResults = await session.requestAuthorization(for: [.worldSensing])
         guard authResults[.worldSensing] == .allowed else {
             authorizationDenied = true
@@ -74,6 +76,7 @@ final class ARKitSessionManager {
             ])
             mappingState = .scanning
         } catch {
+            print("❌ Erro ao iniciar a sessão ARKit: \(error)")
             mappingState = .idle
         }
     }

@@ -5,7 +5,15 @@ import simd
 struct PortalSpawnerSystem: System {
 
     static let spawnerQuery = EntityQuery(where: .has(PortalSpawnerComponent.self))
+
     static let wallQuery = EntityQuery(where: .has(WallSurfaceComponent.self))
+
+    /// Níveis de exigência dos filtros de posicionamento.
+    private enum FilterLevel {
+        case strict          /// distância + campo de visão
+        case noFOV           /// só distância
+        case distanceOnly    /// só distância máxima
+    }
 
     private struct WallPlacement {
         let wall: Entity
@@ -37,16 +45,42 @@ struct PortalSpawnerSystem: System {
             spawner.lastPlacementAttemptTime = now
             entity.components[PortalSpawnerComponent.self] = spawner
 
+            /// Muitas falhas seguidas, diminui os filtros.
+            let level: FilterLevel
+            if spawner.failedAttempts >= PortalSpawnerComponent.attemptsBeforeRelaxingDistance {
+                level = .distanceOnly
+            } else if spawner.failedAttempts >= PortalSpawnerComponent.attemptsBeforeRelaxingFilter {
+                level = .noFOV
+            } else {
+                level = .strict
+            }
+
             guard let placement = Self.randomWallPlacement(
                 among: walls,
                 headTransform: referenceTransform,
-                spawner: spawner
+                spawner: spawner,
+                level: level
             ) else {
+                spawner.failedAttempts += 1
+                entity.components[PortalSpawnerComponent.self] = spawner
+
+                // Loga a cada 8 falhas pra não inundar o console
+                if spawner.failedAttempts % 8 == 1 {
+                    let sizes = walls
+                        .compactMap { $0.components[WallSurfaceComponent.self] }
+                        .map { String(format: "(%.1f×%.1f)", $0.width, $0.height) }
+                        .joined(separator: ", ")
+                    print("🌀 Spawn falhou [nível \(level), tentativa \(spawner.failedAttempts)]: " +
+                          "\(walls.count) parede(s): \(sizes.isEmpty ? "nenhuma" : sizes)")
+                }
                 continue
             }
 
             spawner.lastSpawnTime = now
+            spawner.failedAttempts = 0   // sucesso reseta o fallback
             entity.components[PortalSpawnerComponent.self] = spawner
+
+            print("✅ Portal criado na parede \(placement.wall.name)")
 
             spawnPortal(
                 at: placement,
@@ -75,6 +109,8 @@ struct PortalSpawnerSystem: System {
         initialTransform.scale = finalTransform.scale * 0.001
         portal.transform = initialTransform
 
+        // O portal é SEMPRE filho da entidade da parede —
+        // garante que ele fique alinhado ao plano dela.
         placement.wall.addChild(portal)
 
         portal.move(
@@ -88,7 +124,8 @@ struct PortalSpawnerSystem: System {
     private static func randomWallPlacement(
         among walls: [Entity],
         headTransform: simd_float4x4,
-        spawner: PortalSpawnerComponent
+        spawner: PortalSpawnerComponent,
+        level: FilterLevel
     ) -> WallPlacement? {
         let headPosition = SIMD3<Float>(
             headTransform.columns.3.x,
@@ -139,19 +176,29 @@ struct PortalSpawnerSystem: System {
                 let offset = worldPosition - headPosition
                 let distance = simd_length(offset)
 
-                guard distance >= spawner.minDistance,
-                      distance <= spawner.maxDistance else {
-                    continue
+                // 🔧 Filtros aplicados conforme o nível de fallback:
+                switch level {
+                case .strict:
+                    guard distance >= spawner.minDistance,
+                          distance <= spawner.maxDistance else { continue }
+                case .noFOV:
+                    guard distance >= spawner.minDistance,
+                          distance <= spawner.maxDistance else { continue }
+                case .distanceOnly:
+                    // Ignora a distância mínima — aceita paredes próximas
+                    guard distance <= spawner.maxDistance else { continue }
                 }
 
-                var horizontalDirection = SIMD3<Float>(offset.x, 0, offset.z)
-                guard simd_length(horizontalDirection) > 0.0001 else {
-                    continue
-                }
-                horizontalDirection = normalize(horizontalDirection)
+                if level == .strict {
+                    var horizontalDirection = SIMD3<Float>(offset.x, 0, offset.z)
+                    guard simd_length(horizontalDirection) > 0.0001 else {
+                        continue
+                    }
+                    horizontalDirection = normalize(horizontalDirection)
 
-                guard dot(forward, horizontalDirection) >= minimumFieldDot else {
-                    continue
+                    guard dot(forward, horizontalDirection) >= minimumFieldDot else {
+                        continue
+                    }
                 }
 
                 return WallPlacement(
