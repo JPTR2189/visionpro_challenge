@@ -51,8 +51,9 @@ struct TutorialStepView: View {
     @ViewBuilder
     private var stepPlaceholder: some View {
         switch step {
-        case .runeInteraction:    RunePlaceholderView()
-        case .fireballInteraction: FireballPlaceholderView()
+        case .runeInteraction:       RunePlaceholderView()
+        case .fireballInteraction:   FireballPlaceholderView()
+        case .scanningExplanation:   ScanningPlaceholderView()
         }
     }
 }
@@ -64,20 +65,24 @@ private extension AppModel.TutorialStep {
             return "Look at each rune and click to activate it,\nfollowing the order shown by the lights."
         case .fireballInteraction:
             return "Extend your arm until your hand comes into view.\nOpen your palm, turn it upward, and watch the\nfireball come to life."
+        case .scanningExplanation:
+            return "Take a moment to look around. Mapping your space\nunlocks a more immersive experience."
         }
     }
 
     var leadingIcon: String {
         switch self {
-        case .runeInteraction:     return "eye"
-        case .fireballInteraction: return "hand.point.up.left"
+        case .runeInteraction:       return "eye"
+        case .fireballInteraction:   return "hand.point.up.left"
+        case .scanningExplanation:   return "person.and.arrow.left.and.arrow.right"
         }
     }
 
     var trailingIcon: String {
         switch self {
-        case .runeInteraction:     return "hand.tap"
-        case .fireballInteraction: return "hand.raised"
+        case .runeInteraction:       return "hand.tap"
+        case .fireballInteraction:   return "hand.raised"
+        case .scanningExplanation:   return "move.3d"
         }
     }
 }

@@ -20,6 +20,7 @@ class AppModel {
     enum TutorialStep: Int, CaseIterable, Equatable {
         case runeInteraction
         case fireballInteraction
+        case scanningExplanation
 
         var isLast: Bool { self == Self.allCases.last }
 
