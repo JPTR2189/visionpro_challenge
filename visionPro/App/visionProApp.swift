@@ -1,11 +1,5 @@
-//
-//  visionProApp.swift
-//  visionPro
-//
-//  Created by Jean Pierre on 23/06/26.
-//
-
 import SwiftUI
+import RealityKit
 
 @main
 struct visionProApp: App {
@@ -16,22 +10,17 @@ struct visionProApp: App {
         PortalRuneVisualSystem.registerRealityKitContent()
     }
 
-    var body: some Scene {
+    var body: some SwiftUI.Scene {
         WindowGroup(id: "MainWindow") {
             ContentView()
                 .environment(appModel)
         }
-        .windowStyle(.volumetric)
 
-        ImmersiveSpace(id: appModel.immersiveSpaceID) {
-            ImmersiveView()
+        ImmersiveSpace(id: appModel.portalSpaceID) {
+            PortalExperienceView()
                 .environment(appModel)
-                .onAppear {
-                    appModel.immersiveSpaceState = .open
-                }
-                .onDisappear {
-                    appModel.immersiveSpaceState = .closed
-                }
+                .onAppear   { appModel.portalSpaceState = .open   }
+                .onDisappear { appModel.portalSpaceState = .closed }
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
