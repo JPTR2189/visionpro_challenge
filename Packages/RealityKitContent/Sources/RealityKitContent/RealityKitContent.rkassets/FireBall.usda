@@ -8,51 +8,11 @@
     upAxis = "Y"
 )
 
+reorder rootPrims = ["Root", "SpatialAudio"]
+
 def Xform "Root"
 {
-    reorder nameChildren = ["Sphere", "FireBallMaterial", "ParticleEmitter", "UpLight", "DownLight", "Sun", "Fire"]
-    def Sphere "Sphere" (
-        active = true
-        prepend apiSchemas = ["MaterialBindingAPI"]
-    )
-    {
-        rel material:binding = </Root/FireBallMaterial> (
-            bindMaterialAs = "weakerThanDescendants"
-        )
-        double radius = 0.1
-        quatf xformOp:orient = (1, 0, 0, 0)
-        float3 xformOp:scale = (1, 1, 1)
-        float3 xformOp:translate = (0, 0, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-
-        def Material "DefaultMaterial"
-        {
-            token outputs:mtlx:surface.connect = </Root/Sphere/DefaultMaterial/PreviewSurface.outputs:out>
-            token outputs:realitykit:vertex
-            token outputs:surface.connect = </Root/Sphere/DefaultMaterial/DefaultSurfaceShader.outputs:surface>
-            float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 110.5)
-
-            def Shader "DefaultSurfaceShader" (
-                active = true
-            )
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (1, 1, 1)
-                float inputs:roughness = 0.75
-                token outputs:surface
-            }
-
-            def Shader "PreviewSurface" (
-                active = false
-            )
-            {
-                uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
-                token outputs:out
-                float2 ui:nodegraph:node:pos = (-255, 105)
-            }
-        }
-    }
-
+    reorder nameChildren = ["Sphere", "FireBallMaterial", "UpLight", "DownLight", "Fire"]
     def Material "FireBallMaterial"
     {
         token outputs:mtlx:surface
@@ -69,60 +29,73 @@ def Xform "Root"
         }
     }
 
-    def Xform "UpLight" (
+    def "Sphere" (
+        active = true
         prepend apiSchemas = ["MaterialBindingAPI"]
+        customData = {
+            float3 rotationEulerHint = (6.283184, 6.2831845, 6.283185)
+        }
+        references = @Sphere.usdz@
     )
     {
+        reorder nameChildren = ["Materials", "Meshes", "FireSpatialAudio"]
         rel material:binding = </Root/FireBallMaterial> (
             bindMaterialAs = "weakerThanDescendants"
         )
-        float3 xformOp:translate = (-0.04815016, 0.9106716, 0.08088682)
+        quatf xformOp:orient = (1, -3.8941437e-7, -1.5099585e-7, 8.742272e-8)
+        float3 xformOp:scale = (0.01, 0.01, 0.01)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
-        def RealityKitComponent "PointLight"
-        {
-            float attenuationFalloffExponent = 12
-            float3 color = (1, 0.31897038, 0)
-            token info:id = "RealityKit.PointLight"
-            float intensity = 26963.76
-        }
-
-        def RealityKitComponent "AnimationLibrary"
-        {
-            uniform token info:id = "RealityKit.AnimationLibrary"
-        }
-    }
-
-    def Xform "DownLight" (
-        prepend apiSchemas = ["MaterialBindingAPI"]
-    )
-    {
-        rel material:binding = </Root/FireBallMaterial> (
-            bindMaterialAs = "weakerThanDescendants"
+        def Xform "FireSpatialAudio" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+            customData = {
+                float3 rotationEulerHint = (6.283184, 6.2831845, 6.283185)
+            }
         )
-        float2 ui:nodegraph:node:pos = (20, 20)
-        int ui:nodegraph:node:stackingOrder = 1
-        quatf xformOp:orient = (1, 0, 0, 0)
-        float3 xformOp:scale = (1, 1, 1)
-        float3 xformOp:translate = (-0.042069253, -0.82464266, -0.29621217)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-
-        def RealityKitComponent "PointLight"
         {
-            float attenuationFalloffExponent = 12
-            float3 color = (1, 0.31897038, 0)
-            token info:id = "RealityKit.PointLight"
-            float intensity = 26963.76
+            reorder nameChildren = ["SpatialAudio", "fireSound"]
+            rel material:binding = </Root/FireBallMaterial> (
+                bindMaterialAs = "weakerThanDescendants"
+            )
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (100, 100, 100)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def RealityKitComponent "SpatialAudio"
+            {
+                float directivityFocus = 0.012274305
+                float directLevel = 0
+                float gain = -4.0020833
+                uniform token info:id = "RealityKit.SpatialAudio"
+                float reverbLevel = -9.865625
+                float rolloffFactor = 5
+            }
+
+            def RealityKitAudioFile "fireSound"
+            {
+                uniform token calibrationMode = "relative"
+                uniform asset file = @fire.mp3@
+                uniform token loadingStrategy = "Stream"
+                uniform bool shouldLoop = 1
+                uniform bool shouldRandomizeStartTime = 0
+            }
         }
 
-        def RealityKitComponent "AnimationLibrary"
+        def RealityKitComponent "SpatialAudio"
         {
-            uniform token info:id = "RealityKit.AnimationLibrary"
+            float directLevel = 0
+            float gain = -5
+            uniform token info:id = "RealityKit.SpatialAudio"
+            float rolloffFactor = 5
         }
     }
 
     def Xform "Fire"
     {
+        float3 xformOp:translate = (-0.055415526, 0.30179304, -0.01251936)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
         def RealityKitComponent "VFXEmitter"
         {
             token info:id = "RealityKit.VFXEmitter"
@@ -131,6 +104,7 @@ def Xform "Root"
             {
                 token birthDirection = "Local"
                 token birthLocation = "Volume"
+                int64 burstCount = 100
                 double emissionDuration = 0
                 token emitterShape = "Plane"
                 bool isLocal = 1
@@ -139,43 +113,16 @@ def Xform "Root"
 
                 def RealityKitStruct "mainEmitter"
                 {
+                    token billboardMode = "Billboard"
+                    float birthRate = 10
                     float4 endColorA = (1, 0.008742433, 0, 1)
+                    float particleAngle = 6.2831855
                     double particleLifeSpan = 1
-                    float particleSize = 0.04
+                    float particleSize = 2.5
                     float sizeMultiplierAtEndOfLifespan = 0
+                    float stretchFactor = 0.2
                     bool useEndColor = 1
                     bool useEndColorRange = 0
-                }
-
-                def RealityKitStruct "spawnedEmitter"
-                {
-                }
-            }
-        }
-    }
-
-    def Xform "ParticleEmitter"
-    {
-        def RealityKitComponent "VFXEmitter"
-        {
-            token info:id = "RealityKit.VFXEmitter"
-
-            def RealityKitStruct "currentState"
-            {
-                token birthLocation = "Volume"
-                double emissionDuration = 1
-                token emitterShape = "Plane"
-                bool isLocal = 1
-                bool isLocalFields = 1
-                float particleSpeed = 2
-                bool spawnInheritParentColor = 0
-                token spawnOccasion = "OnDeath"
-                float spawnSpreadFactor = 0.017453292
-
-                def RealityKitStruct "mainEmitter"
-                {
-                    float particleMass = 1
-                    float sizeMultiplierAtEndOfLifespan = 1
                 }
 
                 def RealityKitStruct "spawnedEmitter"

@@ -123,11 +123,11 @@
 			);
 			mainGroup = F71994A02FEB69410038BF9B;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F71994BF2FEB69420038BF9B /* XCLocalSwiftPackageReference "Packages/RealityKitContent" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F71994AA2FEB69410038BF9B /* Products */;
-			packageReferences = (
-				F71994BF2FEB69420038BF9B /* XCLocalSwiftPackageReference "RealityKitContent" */,
-			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -168,6 +168,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Este app usa o rastreamento de mãos para fazer um objeto 3D aparecer na sua palma quando ela está virada para cima.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -197,6 +198,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Este app usa o rastreamento de mãos para fazer um objeto 3D aparecer na sua palma quando ela está virada para cima.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -360,7 +362,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		F71994BF2FEB69420038BF9B /* XCLocalSwiftPackageReference "RealityKitContent" */ = {
+		F71994BF2FEB69420038BF9B /* XCLocalSwiftPackageReference "Packages/RealityKitContent" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/RealityKitContent;
 		};
@@ -369,7 +371,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		F71994AE2FEB69410038BF9B /* RealityKitContent */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = F71994BF2FEB69420038BF9B /* XCLocalSwiftPackageReference "RealityKitContent" */;
+			package = F71994BF2FEB69420038BF9B /* XCLocalSwiftPackageReference "Packages/RealityKitContent" */;
 			productName = RealityKitContent;
 		};
 /* End XCSwiftPackageProductDependency section */
