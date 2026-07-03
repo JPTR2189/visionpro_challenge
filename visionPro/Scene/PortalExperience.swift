@@ -89,6 +89,11 @@ enum PortalExperience {
     }
 
     static func rockName(containing entity: Entity) -> String? {
+        let selectedEntityName = entity.name.uppercased()
+        if selectedEntityName.hasPrefix(runeHitTargetNamePrefix) {
+            return selectedEntityName.replacingOccurrences(of: runeHitTargetNamePrefix, with: "")
+        }
+
         var current: Entity? = entity
 
         while let entity = current {
@@ -371,6 +376,7 @@ enum PortalExperience {
 
         for (index, stone) in floatingStones.enumerated() {
             configureStoneInteraction(on: stone)
+            addRuneHitTarget(for: stone, to: portal)
 
             stone.components.set(
                 PortalFloatingStoneComponent(
@@ -387,6 +393,27 @@ enum PortalExperience {
         }
     }
 
+    private static func addRuneHitTarget(for stone: Entity, to portal: Entity) {
+        let rockName = stone.name.uppercased()
+        let hitTargetName = runeHitTargetName(for: rockName)
+        guard floatingStoneNames.contains(rockName),
+              portal.findEntity(named: hitTargetName) == nil else {
+            return
+        }
+
+        let hitTarget = Entity()
+        hitTarget.name = hitTargetName
+        hitTarget.position = [0, 0, runeHitTargetForwardOffset]
+        hitTarget.components.set(InputTargetComponent(allowedInputTypes: .indirect))
+        hitTarget.components.set(HoverEffectComponent())
+        hitTarget.components.set(
+            CollisionComponent(
+                shapes: [.generateSphere(radius: runeHitTargetRadius)]
+            )
+        )
+        stone.addChild(hitTarget)
+    }
+
     private static func configureStoneInteraction(on stone: Entity) {
         let bounds = stone.visualBounds(relativeTo: stone)
         let radius = max(bounds.extents.x, bounds.extents.y, bounds.extents.z) * 0.62
@@ -398,6 +425,10 @@ enum PortalExperience {
                 shapes: [.generateSphere(radius: max(radius, 0.12))]
             )
         )
+    }
+
+    private static func runeHitTargetName(for rockName: String) -> String {
+        "\(runeHitTargetNamePrefix)\(rockName.uppercased())"
     }
 
     private static func collectFloatingStones(from entity: Entity, into result: inout [Entity]) {
@@ -422,6 +453,10 @@ enum PortalExperience {
         "ROCK_G",
         "ROCK_H"
     ]
+
+    private static let runeHitTargetNamePrefix = "RUNEHITTARGET_"
+    private static let runeHitTargetRadius: Float = 0.46
+    private static let runeHitTargetForwardOffset: Float = 0.9
 
     private static func addPortalPlaceholder(to root: Entity) {
         var centerMaterial = UnlitMaterial()
