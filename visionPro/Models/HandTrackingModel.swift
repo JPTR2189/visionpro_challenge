@@ -20,11 +20,9 @@ final class HandTrackingModel {
     var leftSphereShouldAppear = false
     private var leftConsecutiveFramesUp = 0
 
-    /// Estado da bola de fogo na mão
-    private var rightSphereIsHeld = false
-    private var leftSphereIsHeld = false
-    private var rightFramesSinceUp = 0
-    private var leftFramesSinceUp = 0
+    /// Permite que usuário dispare uma bola de fogo por vez
+    private var rightThrowFired = false
+    private var leftThrowFired = false
 
     /// Gesto de arremesso (palma virando pra frente)
     var rightThrowTriggered = false
@@ -44,8 +42,6 @@ final class HandTrackingModel {
     private let framesToConfirm = 10
     /// Frames para confirmar o arremesso
     private let framesToConfirmThrow = 5
-    /// Tolerância para movimento de lançar bola de fogo (~1s a 90Hz)
-    private let framesToAbandonHold = 90
 
     /// Usada para aceitar só arremessos para frente 
     @ObservationIgnored
@@ -74,121 +70,109 @@ final class HandTrackingModel {
         guard let skeleton = handAnchor.handSkeleton else { return }
 
         let wristJoint = skeleton.joint(.wrist)
-        guard wristJoint.isTracked else { return }
+        let indexMetacarpal = skeleton.joint(.indexFingerMetacarpal)
+        let littleMetacarpal = skeleton.joint(.littleFingerMetacarpal)
+        guard wristJoint.isTracked,
+              indexMetacarpal.isTracked,
+              littleMetacarpal.isTracked else { return }
 
-        let wristTransform = handAnchor.originFromAnchorTransform * wristJoint.anchorFromJointTransform
+        let wristPosition = jointWorldPosition(wristJoint, in: handAnchor)
+        let indexPosition = jointWorldPosition(indexMetacarpal, in: handAnchor)
+        let littlePosition = jointWorldPosition(littleMetacarpal, in: handAnchor)
 
-        let sign: Float = handAnchor.chirality == .right ? -1 : 1
-        let palmNormal = sign * SIMD3<Float>(
-            wristTransform.columns.1.x,
-            wristTransform.columns.1.y,
-            wristTransform.columns.1.z
-        )
+        /// Cálculo posição normal da palma (direção que a palma aponta)
+        let toIndex = indexPosition - wristPosition
+        let toLittle = littlePosition - wristPosition
+        let palmNormal = handAnchor.chirality == .right
+            ? cross(toLittle, toIndex)
+            : cross(toIndex, toLittle)
+        guard length(palmNormal) > 0.0001 else { return }
         let normalizedPalm = normalize(palmNormal)
 
         let worldUp = SIMD3<Float>(0, 1, 0)
         let upAlignment = dot(normalizedPalm, worldUp)
         let isUp = upAlignment > 0.75
-        
-        /// Direção do arremesso da bola de fogo
-        let horizontalComponent = SIMD3<Float>(
-        normalizedPalm.x,
-        0,
-        normalizedPalm.z
-    )
 
-        let horizontalMagnitude = length(horizontalComponent)
-        let isForward = horizontalMagnitude > 0.8 && abs(upAlignment) < 0.4
+        /// Direção do arremesso da bola de fogo.
+        let horizontalComponent = SIMD3<Float>(
+            normalizedPalm.x,
+            0,
+            normalizedPalm.z
+        )
+
+        let isForward = abs(upAlignment) < 0.5
+            && length(horizontalComponent) > 0.001
 
         let throwDirection: SIMD3<Float> = isForward
             ? normalize(horizontalComponent)
             : .zero
-        
 
-        let palmWorldPosition = SIMD3<Float>(
-            wristTransform.columns.3.x,
-            wristTransform.columns.3.y,
-            wristTransform.columns.3.z
-        )
+        let palmWorldPosition = wristPosition
 
         await MainActor.run {
             /// Só aceita o arremesso se a palma aponta para onde o usuário olha
             let deviceForward = deviceForwardProvider?()
             let isThrowForward = isForward
-                && (deviceForward.map { dot(throwDirection, $0) > 0.5 } ?? true)
+                && (deviceForward.map { dot(throwDirection, $0) > 0.4 } ?? true)
 
             switch handAnchor.chirality {
             case .right:
                 rightPalmIsFacingUp = isUp
                 rightPalmWorldPosition = palmWorldPosition
+
+                /// Gesto 1 (palma para cima exibe a bola)
                 updateDebounced(isUp, consecutiveFrames: &rightConsecutiveFramesUp) { rightSphereShouldAppear = $0 }
 
-                /// A bola só é "segurada" depois de confirmada visualmente,
-                /// para o arremesso nunca disparar sem bola na mão
-
-                if isUp {
-                    rightFramesSinceUp = 0
-                    if rightSphereShouldAppear {
-                        rightSphereIsHeld = true
-                    }
-                } else {
-                    rightFramesSinceUp += 1
-                    if rightFramesSinceUp > framesToAbandonHold {
-                        rightSphereIsHeld = false
-                    }
-                }
-
+                /// Gesto 2 (palma para frente arremessa)
                 updateThrowDetection(
                     isForward: isThrowForward,
-                    sphereIsActive: rightSphereIsHeld,
                     direction: throwDirection,
-                    consecutiveFrames: &rightConsecutiveFramesForward
+                    consecutiveFrames: &rightConsecutiveFramesForward,
+                    hasFired: &rightThrowFired
                 ) { direction in
                     print("🧭 [DIREITA] throwDirection detectado")
                     print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
                     rightThrowDirection = direction
                     rightThrowTriggered = true
+                    /// Esconde a bola da mão
                     rightSphereShouldAppear = false
-                    rightSphereIsHeld = false
                     rightConsecutiveFramesUp = 0
                 }
             case .left:
                 leftPalmIsFacingUp = isUp
                 leftPalmWorldPosition = palmWorldPosition
-                updateDebounced(isUp, consecutiveFrames: &leftConsecutiveFramesUp) { leftSphereShouldAppear = $0 }
 
-                if isUp {
-                    leftFramesSinceUp = 0
-                    if leftSphereShouldAppear {
-                        leftSphereIsHeld = true
-                    }
-                } else {
-                    leftFramesSinceUp += 1
-                    if leftFramesSinceUp > framesToAbandonHold {
-                        leftSphereIsHeld = false
-                    }
-                }
+                updateDebounced(isUp, consecutiveFrames: &leftConsecutiveFramesUp) { leftSphereShouldAppear = $0 }
 
                 updateThrowDetection(
                     isForward: isThrowForward,
-                    sphereIsActive: leftSphereIsHeld,
                     direction: throwDirection,
-                    consecutiveFrames: &leftConsecutiveFramesForward
+                    consecutiveFrames: &leftConsecutiveFramesForward,
+                    hasFired: &leftThrowFired
                 ) { direction in
-                    print("---DEBUG DIRECTION---")
                     print("🧭 [ESQUERDA] throwDirection detectado")
                     print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
-                    print("-------------------------")
                     leftThrowDirection = direction
                     leftThrowTriggered = true
+                    /// Esconde a bola da mão: uma nova instância é arremessada
                     leftSphereShouldAppear = false
-                    leftSphereIsHeld = false
                     leftConsecutiveFramesUp = 0
                 }
             @unknown default:
                 break
             }
         }
+    }
+
+    /// Posição de referência da mão no mundo físico
+    private func jointWorldPosition(_ joint: HandSkeleton.Joint,
+                                    in handAnchor: HandAnchor) -> SIMD3<Float> {
+        let transform = handAnchor.originFromAnchorTransform * joint.anchorFromJointTransform
+        return SIMD3<Float>(
+            transform.columns.3.x,
+            transform.columns.3.y,
+            transform.columns.3.z
+        )
     }
 
     func resetThrowTrigger(isRight: Bool) {
@@ -210,24 +194,23 @@ final class HandTrackingModel {
         apply(consecutiveFrames > framesToConfirm)
     }
 
+    /// Detecção do arremesso
     private func updateThrowDetection(isForward: Bool,
-                                      sphereIsActive: Bool,
                                       direction: SIMD3<Float>,
                                       consecutiveFrames: inout Int,
+                                      hasFired: inout Bool,
                                       onThrow: (SIMD3<Float>) -> Void) {
-        guard sphereIsActive else {
-            consecutiveFrames = 0
-            return
-        }
-
         if isForward {
             consecutiveFrames += 1
-            if consecutiveFrames == framesToConfirmThrow {
+            if !hasFired && consecutiveFrames >= framesToConfirmThrow {
+                hasFired = true
                 onThrow(direction)
-                consecutiveFrames = 0
             }
         } else {
             consecutiveFrames = max(consecutiveFrames - 1, 0)
+            if consecutiveFrames == 0 {
+                hasFired = false
+            }
         }
     }
 }
