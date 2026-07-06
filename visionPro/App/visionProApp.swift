@@ -6,15 +6,9 @@ struct visionProApp: App {
     @State private var appModel = AppModel()
 
     init() {
-        WallSurfaceComponent.registerComponent()
-        PortalSpawnerComponent.registerComponent()
-
         ProjectileComponent.registerComponent()
         RotationComponent.registerComponent()
-        EnvironmentMeshComponent.registerComponent()
-        PortalComponent.registerComponent()
 
-        PortalSpawnerSystem.registerSystem()
         ProjectileSystem.registerSystem()
         RotationSystem.registerSystem()
     }

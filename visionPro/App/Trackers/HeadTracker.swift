@@ -60,19 +60,4 @@ final class HeadTracker {
         print("⚠️ queryDeviceAnchor retornou nil")
         return nil
     }
-
-    /// Procurar capturar uma referência fixa para começar a gerar os portais
-    func captureReferenceTransform(maxAttempts: Int = 30, delayNanoseconds: UInt64 = 100_000_000) async -> simd_float4x4? {
-        
-        /// Procura  encontrar uma referência fixa com um limite de vezes
-        for attempt in 1...maxAttempts {
-            if let transform = currentHeadTransform() {
-                print("Referência fixa capturada na tentativa \(attempt).")
-                return transform
-            }
-            try? await Task.sleep(nanoseconds: delayNanoseconds)
-        }
-        print("❌ Falhou ao capturar referência depois de \(maxAttempts) tentativas.")
-        return nil
-    }
 }

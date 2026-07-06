@@ -20,6 +20,6 @@
 		</dict>
 	</dict>
 	<key>NSWorldSensingUsageDescription</key>
-	<string>Used to detect walls and floors in your environment for placing portals and interactive elements.</string>
+	<string>Used to track your position in the room so fireballs are thrown in the direction you're facing.</string>
 </dict>
 </plist>
