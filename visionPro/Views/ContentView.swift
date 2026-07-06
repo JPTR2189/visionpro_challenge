@@ -13,7 +13,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            TogglePortalSpaceButton()
+            ToggleDebugButton()
         }
         .frame(width: 380)
         .padding(32)

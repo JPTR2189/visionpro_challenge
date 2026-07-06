@@ -9,6 +9,7 @@ import SwiftUI
 @Observable
 class AppModel {
     let portalSpaceID = "PortalExperienceSpace"
+    var debugForceShow = false
 
     enum ImmersiveSpaceState {
         case closed

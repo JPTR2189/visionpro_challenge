@@ -15,6 +15,15 @@
     "objectMetadataList" : [
       [
         "1D572CEB-057A-41C3-B575-04C37501A3C0",
+        "Root",
+        "Sphere_Left"
+      ],
+      {
+        "isExpanded" : true,
+        "isLocked" : false
+      },
+      [
+        "1D572CEB-057A-41C3-B575-04C37501A3C0",
         "Root"
       ],
       {
@@ -29,15 +38,6 @@
       {
         "isExpanded" : true,
         "isLocked" : false
-      },
-      [
-        "1D572CEB-057A-41C3-B575-04C37501A3C0",
-        "Root",
-        "Sphere_Left"
-      ],
-      {
-        "isExpanded" : true,
-        "isLocked" : false
       }
     ]
   },
@@ -45,35 +45,14 @@
     "objectMetadataList" : [
       [
         "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
-        "Root"
-      ],
-      {
-        "isExpanded" : true,
-        "isLocked" : false
-      },
-      [
-        "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
         "Root",
-        "Sphere"
+        "SpatialAudio"
       ],
       {
-        "isExpanded" : true,
+        "isExpanded" : false,
         "isLocked" : false,
         "selectedAudioFilePrim" : {
-          "string" : "\/Root\/Sphere\/FireSpatialAudio\/fireSound"
-        }
-      },
-      [
-        "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
-        "Root",
-        "Sphere",
-        "FireSpatialAudio"
-      ],
-      {
-        "isExpanded" : true,
-        "isLocked" : false,
-        "selectedAudioFilePrim" : {
-          "string" : "\/Root\/Sphere\/FireSpatialAudio\/fireSound"
+          "string" : "\/Root\/SpatialAudio\/spawn_fire"
         }
       },
       [
@@ -91,13 +70,59 @@
       [
         "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
         "Root",
-        "SpatialAudio"
+        "FireSpawnSpatialAudio"
       ],
       {
         "isExpanded" : false,
         "isLocked" : false,
         "selectedAudioFilePrim" : {
-          "string" : "\/Root\/SpatialAudio\/fire_mp3"
+          "string" : "\/Root\/SpatialAudio\/spawn_fire"
+        }
+      },
+      [
+        "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
+        "Root"
+      ],
+      {
+        "isExpanded" : true,
+        "isLocked" : false
+      },
+      [
+        "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
+        "Root",
+        "Sphere",
+        "FireSpatialAudio"
+      ],
+      {
+        "isExpanded" : false,
+        "isLocked" : false,
+        "selectedAudioFilePrim" : {
+          "string" : "\/Root\/Sphere\/FireSpatialAudio\/fire_sound"
+        }
+      },
+      [
+        "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
+        "Root",
+        "Sphere",
+        "FireSpawnSpatialAudio"
+      ],
+      {
+        "isExpanded" : true,
+        "isLocked" : false,
+        "selectedAudioFilePrim" : {
+          "string" : "\/Root\/Sphere\/FireSpawnSpatialAudio\/spawn_fire"
+        }
+      },
+      [
+        "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
+        "Root",
+        "Sphere"
+      ],
+      {
+        "isExpanded" : true,
+        "isLocked" : false,
+        "selectedAudioFilePrim" : {
+          "string" : "\/Root\/Sphere\/FireSpatialAudio\/fire_sound"
         }
       }
     ]

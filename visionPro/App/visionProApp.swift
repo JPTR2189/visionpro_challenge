@@ -21,7 +21,12 @@ struct visionProApp: App {
                 .environment(appModel)
                 .onAppear   { appModel.portalSpaceState = .open   }
                 .onDisappear { appModel.portalSpaceState = .closed }
+            
+            HandSphereView()
+                .environment(appModel)
+
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
+        
     }
 }

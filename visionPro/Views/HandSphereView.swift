@@ -23,9 +23,15 @@ struct HandSphereView: View {
     @State private var leftAudioEntity: Entity?
     @State private var debugAudioEntity: Entity?
 
-    /// Áudio carregado UMA vez no make (async), podendo ser usado nas três esferas
+    /// Tarefas atrasadas (rotação, fogo, desativação) do ciclo atual de cada esfera.
+    @State private var rightPendingTask: Task<Void, Never>?
+    @State private var leftPendingTask: Task<Void, Never>?
+    @State private var debugPendingTask: Task<Void, Never>?
+
+    /// Áudios carregados UMA vez no make (async), podendo ser usados nas três esferas
 
     @State private var sharedAudioResource: AudioFileResource?
+    @State private var spawnAudioResource: AudioFileResource?
 
     private let targetScale: Float = 0.05
     private let palmOffset: SIMD3<Float> = [0, 0.1, 0]
@@ -37,13 +43,23 @@ struct HandSphereView: View {
 
             
             if let resource = try? await AudioFileResource(
-                named: "/Root/Sphere/FireSpatialAudio/fireSound",
+                named: "/Root/Sphere/FireSpatialAudio/fire_sound",
                 from: "FireBall.usda",
                 in: realityKitContentBundle
             ) {
                 sharedAudioResource = resource
             } else {
                 print("⚠️ Não conseguiu carregar o recurso de áudio.")
+            }
+
+            if let resource = try? await AudioFileResource(
+                named: "/Root/Sphere/FireSpawnSpatialAudio/spawn_fire",
+                from: "FireBall.usda",
+                in: realityKitContentBundle
+            ) {
+                spawnAudioResource = resource
+            } else {
+                print("⚠️ Não conseguiu carregar o áudio de spawn.")
             }
 
             // Mão direita — rotação HORÁRIA
@@ -76,7 +92,7 @@ struct HandSphereView: View {
                 print("❌ FireBall (esquerda) não carregou.")
             }
 
-            // 🧪 Debug — ponto fixo no mundo
+            // Debug 
             if let debugFireBall = try? await Entity(named: "FireBall", in: realityKitContentBundle) {
                 let worldAnchor = AnchorEntity(world: [0, 1.2, -0.5])
                 debugFireBall.scale = [0.001, 0.001, 0.001]
@@ -86,6 +102,13 @@ struct HandSphereView: View {
                 content.add(worldAnchor)
                 debugSphereEntity = debugFireBall
                 debugAudioEntity = debugFireBall.findEntity(named: "Sphere")
+
+                if appModel.debugForceShow {
+                    showSphere(debugSphereEntity, audioEntity: debugAudioEntity,
+                               audioController: &debugAudioController,
+                               pendingTask: &debugPendingTask,
+                               show: true, translation: [0, 0, 0])
+                }
             } else {
                 print("❌ FireBall (debug) não carregou.")
             }
@@ -93,16 +116,19 @@ struct HandSphereView: View {
         .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in
             showSphere(rightSphereEntity, audioEntity: rightAudioEntity,
                        audioController: &rightAudioController,
+                       pendingTask: &rightPendingTask,
                        show: shouldAppear, translation: palmOffset)
         }
         .onChange(of: handModel.leftSphereShouldAppear) { _, shouldAppear in
             showSphere(leftSphereEntity, audioEntity: leftAudioEntity,
                        audioController: &leftAudioController,
+                       pendingTask: &leftPendingTask,
                        show: shouldAppear, translation: palmOffset)
         }
         .onChange(of: appModel.debugForceShow) { _, shouldAppear in
             showSphere(debugSphereEntity, audioEntity: debugAudioEntity,
                        audioController: &debugAudioController,
+                       pendingTask: &debugPendingTask,
                        show: shouldAppear, translation: [0, 0, 0])
         }
         .task {
@@ -116,8 +142,12 @@ struct HandSphereView: View {
     private func showSphere(_ entity: Entity?,
                             audioEntity: Entity?,
                             audioController: inout AudioPlaybackController?,
+                            pendingTask: inout Task<Void, Never>?,
                             show: Bool,
                             translation: SIMD3<Float>) {
+        /// Cancela as tarefas atrasadas do ciclo anterior
+        pendingTask?.cancel()
+
         if show {
             /// Ativa a entidade ANTES de animar
             entity?.isEnabled = true
@@ -125,15 +155,27 @@ struct HandSphereView: View {
             // Anima o crescimento
             animate(entity, show: true, translation: translation)
 
-            /// Começa a tocar o áudio
-            if let audioEntity, let resource = sharedAudioResource {
-                audioController = audioEntity.playAudio(resource)
+            /// Toca o som de spawn imediatamente, a cada aparição
+            if let audioEntity, let spawnResource = spawnAudioResource {
+                audioEntity.playAudio(spawnResource)
             }
 
-            /// Ativa rotação após a animação de scale terminar
-            Task {
+            /// Prepara o som contínuo de fogo para iniciar 1s após o spawn
+            var fireController: AudioPlaybackController?
+            if let audioEntity, let resource = sharedAudioResource {
+                fireController = audioEntity.prepareAudio(resource)
+            }
+            audioController = fireController
+
+            /// Rotação após a animação de scale
+            pendingTask = Task { [fireController] in
                 try? await Task.sleep(nanoseconds: animationDuration)
+                guard !Task.isCancelled else { return }
                 setRotation(on: entity, active: true)
+
+                try? await Task.sleep(nanoseconds: 1_000_000_000 - animationDuration)
+                guard !Task.isCancelled else { return }
+                fireController?.play()
             }
 
         } else {
@@ -146,8 +188,9 @@ struct HandSphereView: View {
             animate(entity, show: false, translation: translation)
 
             /// Desativa a entidade APÓS a animação terminar
-            Task {
+            pendingTask = Task {
                 try? await Task.sleep(nanoseconds: animationDuration)
+                guard !Task.isCancelled else { return }
                 entity?.isEnabled = false
             }
         }

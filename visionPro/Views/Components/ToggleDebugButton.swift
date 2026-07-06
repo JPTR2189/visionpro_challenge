@@ -1,24 +1,23 @@
 import SwiftUI
 
-struct TogglePortalSpaceButton: View {
+struct ToggleDebugButton: View {
 
     @Environment(AppModel.self) private var appModel
-    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
-    @Environment(\.openImmersiveSpace)    private var openImmersiveSpace
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
 
     var body: some View {
         Button {
             Task { @MainActor in
                 switch appModel.portalSpaceState {
                 case .open:
-                    appModel.portalSpaceState = .inTransition
-                    await dismissImmersiveSpace()
+                    appModel.debugForceShow.toggle()
 
                 case .closed:
+                  
                     appModel.portalSpaceState = .inTransition
                     switch await openImmersiveSpace(id: appModel.portalSpaceID) {
                     case .opened:
-                        break
+                        appModel.debugForceShow = true
                     case .userCancelled, .error:
                         fallthrough
                     @unknown default:
@@ -31,8 +30,8 @@ struct TogglePortalSpaceButton: View {
             }
         } label: {
             Label(
-                appModel.portalSpaceState == .open ? "Close Portal Experience" : "Open Portal Experience",
-                systemImage: appModel.portalSpaceState == .open ? "xmark.circle" : "circle.hexagongrid"
+                appModel.debugForceShow ? "Disable debug mode" : "Enable debug mode",
+                systemImage: appModel.debugForceShow ? "xmark.circle" : "ladybug"
             )
         }
         .disabled(appModel.portalSpaceState == .inTransition)
