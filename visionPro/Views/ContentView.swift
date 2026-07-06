@@ -6,7 +6,7 @@ struct ContentView: View {
     var body: some View {
         switch appModel.onboardingState {
         case .hero:
-            HeroView()
+            HomeView()
         case .tutorial(let step):
             TutorialContainerView(currentStep: step)
         case .done:

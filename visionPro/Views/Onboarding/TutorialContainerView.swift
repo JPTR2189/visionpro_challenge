@@ -1,13 +1,20 @@
 import SwiftUI
 
 struct TutorialContainerView: View {
+    @Environment(AppModel.self) private var appModel
     let currentStep: AppModel.TutorialStep
 
     var body: some View {
-        TutorialStepView(step: currentStep)
-            .overlay {
-                TutorialNavigationBar(step: currentStep)
+        Group {
+            switch currentStep {
+            case .runeInteraction:
+                TutorialRuneView()
+            case .fireballInteraction:
+                TutorialFireballView()
+            case .scanningExplanation:
+                TutorialScanningView()
             }
-            .transition(.opacity)
+        }
+        .transition(.opacity)
     }
 }
