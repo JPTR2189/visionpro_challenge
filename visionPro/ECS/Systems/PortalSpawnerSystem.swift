@@ -84,16 +84,29 @@ struct PortalSpawnerSystem: System {
 
             spawnPortal(
                 at: placement,
-                template: spawner.portalTemplate!
+                template: spawner.portalTemplate!,
+                collisionSize: spawner.portalSize
             )
         }
     }
 
     private func spawnPortal(
         at placement: WallPlacement,
-        template: Entity
+        template: Entity,
+        collisionSize: SIMD2<Float>
     ) {
         let portal = template.clone(recursive: true)
+
+        /// Identifica o portal para o CollisionHandler e dá a ele um colisor estático
+        portal.components.set(PortalComponent())
+        portal.components.set(CollisionComponent(
+            shapes: [.generateBox(
+                width: collisionSize.x,
+                height: collisionSize.y,
+                depth: 0.15
+            )],
+            mode: .default
+        ))
 
         var finalTransform = portal.transform
         finalTransform.translation = placement.localPosition

@@ -110,7 +110,9 @@ final class CollisionHandler {
             )
 
             try? await Task.sleep(nanoseconds: 300_000_000)
-            projectile.parent?.removeFromParent()
+            /// Remove só o projétil: o pai agora é o sceneRoot —
+            /// remover o pai apagaria a cena inteira.
+            projectile.removeFromParent()
         }
     }
 }

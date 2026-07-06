@@ -41,16 +41,12 @@ struct PortalExperienceView: View {
     /// Adiciona o handler de colisão das bolas de fogo
     @State private var collisionHandler = CollisionHandler()
     
-    /// Aramzena o conteúdo da cena do RealityKit
-    @State private var sceneContent: RealityViewContent?
-
     private let targetScale: Float = 0.05
     private let palmOffset: SIMD3<Float> = [0, 0.1, 0]
     private let animationDuration: UInt64 = 350_000_000
 
     var body: some View {
         RealityView { content, attachments in
-            sceneContent = content
             content.add(sceneRoot)
 
             /// Observador das colisões
@@ -349,9 +345,10 @@ struct PortalExperienceView: View {
             entity.components.set(EnvironmentMeshComponent())
 
             if let shape = try? await ShapeResource.generateStaticMesh(from: anchor) {
+
                 entity.components.set(CollisionComponent(
                     shapes: [shape],
-                    mode: .trigger   // detecta contato, sem física de empurrão
+                    mode: .default
                 ))
             } else {
                 print("⚠️ Não consegui gerar forma de colisão para o anchor \(anchor.id).")
@@ -427,7 +424,7 @@ struct PortalExperienceView: View {
         print("---DEBUG FIREBALL CALLER---")
         print("   direction recebida: x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
         print("   worldPos da palma:  \(palmWorldPosition)")
-        guard let handEntity, let content = sceneContent else { return }
+        guard let handEntity else { return }
 
         guard length(direction) > 0.001 else {
             print("⚠️ throwFireball: direção inválida.")
@@ -457,13 +454,17 @@ struct PortalExperienceView: View {
             )
         )
 
-        let worldAnchor = AnchorEntity(world: spawnPosition)
-        projectile.position = [0, 0, 0]
+
+        projectile.components.set(
+            PhysicsBodyComponent(mode: .kinematic)
+        )
+
+
+        projectile.position = spawnPosition
         projectile.scale = [targetScale, targetScale, targetScale]
         projectile.isEnabled = true
 
-        worldAnchor.addChild(projectile)
-        content.add(worldAnchor)
+        sceneRoot.addChild(projectile)
 
         if let audioEntity = projectile.findEntity(named: "Sphere"),
            let resource = sharedAudioResource {

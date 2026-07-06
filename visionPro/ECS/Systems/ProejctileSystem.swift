@@ -16,27 +16,16 @@ class ProjectileSystem: System {
         for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
             guard let projectile = entity.components[ProjectileComponent.self] else { continue }
 
-            /// Destrói a bola de fogo e a âncora de mundo quando o tempo expirou
-
+            /// Destrói a bola de fogo quando o tempo expirou
             if now - projectile.launchTime >= projectile.lifetime {
-                if let anchor = entity.parent as? AnchorEntity {
-                    anchor.removeFromParent()
-                } else {
-                    entity.removeFromParent()
-                }
+                entity.removeFromParent()
                 continue
             }
 
             /// Movimento constante na direção do arremesso
             /// deslocamento = direção × velocidade × tempo do frame
             let direction = normalize(projectile.direction)
-            let displacement = direction * projectile.speed * deltaTime
-
-            let currentWorldPosition = entity.position(relativeTo: nil)
-            entity.setPosition(
-                currentWorldPosition + displacement,
-                relativeTo: nil
-            )
+            entity.position += direction * projectile.speed * deltaTime
         }
     }
 }
