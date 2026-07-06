@@ -96,6 +96,11 @@ struct PortalExperienceView: View {
             )
 
             if isCorrect {
+                await PortalExperience.moveCorrectRuneToPortalCenter(
+                    for: selectedRockName,
+                    in: portalScene
+                )
+
                 selectedIndex += 1
                 if selectedIndex < currentSequence.count {
                     isAcceptingRuneInput = true
