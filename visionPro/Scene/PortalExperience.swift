@@ -11,6 +11,7 @@ import SwiftUI
 @MainActor
 enum PortalExperience {
     private static let sequenceLength = 6
+    private static var centeredStoneNames: Set<String> = []
 
     static func makeScene() -> Entity {
         let root = Entity()
@@ -84,6 +85,69 @@ enum PortalExperience {
         setPortalLight(named: lightName, enabled: false, in: root)
     }
 
+    static func moveCorrectRuneToPortalCenter(for rockName: String, in root: Entity) async {
+        guard let portal = root.findEntity(named: "MagicPortal"),
+              let stone = portal.findEntity(named: rockName) else {
+            return
+        }
+
+        centeredStoneNames.insert(stone.name.uppercased())
+
+        let originalParent = stone.parent
+        let originalTransform = stone.transform
+        let originalInput = stone.components[InputTargetComponent.self]
+        let originalHover = stone.components[HoverEffectComponent.self]
+        let originalCollision = stone.components[CollisionComponent.self]
+        stone.components.remove(InputTargetComponent.self)
+        stone.components.remove(HoverEffectComponent.self)
+        stone.components.remove(CollisionComponent.self)
+
+        stone.setParent(portal, preservingWorldTransform: true)
+
+        let targetScale = stone.scale * 0.72
+        let targetRotation = stone.orientation
+        let targetVisualCenter = referenceRuneVisualCenter(in: portal)
+        let visualOffset = visualCenterOffset(
+            for: stone,
+            scale: targetScale,
+            rotation: targetRotation
+        )
+        let targetTransform = Transform(
+            scale: targetScale,
+            rotation: targetRotation,
+            translation: targetVisualCenter - visualOffset
+        )
+
+        stone.move(
+            to: targetTransform,
+            relativeTo: portal,
+            duration: 0.42,
+            timingFunction: .easeInOut
+        )
+
+        try? await Task.sleep(nanoseconds: 780_000_000)
+
+        stone.setParent(originalParent, preservingWorldTransform: true)
+        stone.move(
+            to: originalTransform,
+            relativeTo: originalParent,
+            duration: 0.34,
+            timingFunction: .easeInOut
+        )
+
+        try? await Task.sleep(nanoseconds: 360_000_000)
+        if let originalInput {
+            stone.components.set(originalInput)
+        }
+        if let originalHover {
+            stone.components.set(originalHover)
+        }
+        if let originalCollision {
+            stone.components.set(originalCollision)
+        }
+        centeredStoneNames.remove(stone.name.uppercased())
+    }
+
     static func resetLights(in root: Entity) {
         resetPortalLights(in: root)
     }
@@ -148,6 +212,11 @@ enum PortalExperience {
         var direction: Float = 1
 
         while !Task.isCancelled {
+            if centeredStoneNames.contains(stone.name.uppercased()) {
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                continue
+            }
+
             let drift = sin(phase + direction * 0.9) * amplitude * 0.22
             let depth = cos(phase + direction * 1.2) * amplitude * 0.16
             let liftedPosition = basePosition + [
@@ -214,11 +283,50 @@ enum PortalExperience {
             portal.position -= bounds.center * normalizedScale
         }
 
+        addPortalInterior(to: portal)
         configureFloatingStones(in: portal)
         configureRuntimePortalLights(in: portal)
         resetPortalLights(in: portal)
 
         return portal
+    }
+
+    private static func addPortalInterior(to portal: Entity) {
+        guard let interior = makePortalInterior() else { return }
+
+        interior.name = "PortalInterior"
+        interior.position = [0, 0, -0.16]
+        portal.addChild(interior)
+    }
+
+    private static func makePortalInterior() -> Entity? {
+        let interiorURL =
+            Bundle.main.url(
+                forResource: "Dentro do portal",
+                withExtension: "usdz",
+                subdirectory: "Resources"
+            ) ?? Bundle.main.url(
+                forResource: "Dentro do portal",
+                withExtension: "usdz"
+            )
+
+        guard let interiorURL,
+              let interior = try? Entity.load(contentsOf: interiorURL) else {
+            return nil
+        }
+
+        let container = Entity()
+        let bounds = interior.visualBounds(relativeTo: interior)
+        let largestExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
+        if largestExtent > 0 {
+            let targetSize: Float = 0.88
+            let normalizedScale = targetSize / largestExtent
+            interior.scale = [normalizedScale, normalizedScale, normalizedScale]
+            interior.position -= bounds.center * normalizedScale
+        }
+
+        container.addChild(interior)
+        return container
     }
 
     private static func playLightSequence(_ sequence: [RuneLightBinding], in root: Entity) async {
@@ -374,6 +482,51 @@ enum PortalExperience {
     }
 
     private static let runtimeLightForwardOffset: Float = 0.9
+
+    private static func portalCenterRunePosition(in portal: Entity) -> SIMD3<Float> {
+        var center = runeLightBindings.reduce(SIMD3<Float>(repeating: 0)) { partialResult, rune in
+            partialResult + rune.lightPosition
+        } / Float(runeLightBindings.count)
+
+        center.z = portalCenterDepth
+        return center
+    }
+
+    private static let portalCenterDepth: Float = -0.22
+
+    private static func referenceRuneVisualCenter(in portal: Entity) -> SIMD3<Float> {
+        let pivotTarget = portalCenterRunePosition(in: portal)
+        guard let referenceStone = portal.findEntity(named: "ROCK_C") else {
+            return pivotTarget
+        }
+
+        let referenceScale = referenceStone.scale * 0.72
+        let referenceRotation = referenceStone.orientation
+        let referenceOffset = visualCenterOffset(
+            for: referenceStone,
+            scale: referenceScale,
+            rotation: referenceRotation
+        )
+
+        return pivotTarget + referenceOffset + portalCenterVisualAdjustment
+    }
+
+    private static let portalCenterVisualAdjustment = SIMD3<Float>(0, -1.20, 0.10)
+
+    private static func visualCenterOffset(
+        for stone: Entity,
+        scale: SIMD3<Float>,
+        rotation: simd_quatf
+    ) -> SIMD3<Float> {
+        let localCenter = stone.visualBounds(relativeTo: stone).center
+        let scaledCenter = SIMD3<Float>(
+            localCenter.x * scale.x,
+            localCenter.y * scale.y,
+            localCenter.z * scale.z
+        )
+
+        return rotation.act(scaledCenter)
+    }
 
     private static func configureFloatingStones(in portal: Entity) {
         var floatingStones: [Entity] = []
