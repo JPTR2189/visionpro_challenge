@@ -80,12 +80,12 @@ final class HandTrackingModel {
         let indexPosition = jointWorldPosition(indexMetacarpal, in: handAnchor)
         let littlePosition = jointWorldPosition(littleMetacarpal, in: handAnchor)
 
-        /// Cálculo posição normal da palma (direção que a palma aponta)
+        /// Cálculo posição normal da palma (direção que a palma aponta).
         let toIndex = indexPosition - wristPosition
         let toLittle = littlePosition - wristPosition
         let palmNormal = handAnchor.chirality == .right
-            ? cross(toLittle, toIndex)
-            : cross(toIndex, toLittle)
+            ? cross(toIndex, toLittle)
+            : cross(toLittle, toIndex)
         guard length(palmNormal) > 0.0001 else { return }
         let normalizedPalm = normalize(palmNormal)
 
@@ -201,7 +201,11 @@ final class HandTrackingModel {
                                       hasFired: inout Bool,
                                       onThrow: (SIMD3<Float>) -> Void) {
         if isForward {
-            consecutiveFrames += 1
+            /// Limite máximo de frames consecutivos para aceitar o arremesso
+            consecutiveFrames = min(
+                consecutiveFrames + 1,
+                framesToConfirmThrow + toleratedBadFrames
+            )
             if !hasFired && consecutiveFrames >= framesToConfirmThrow {
                 hasFired = true
                 onThrow(direction)
