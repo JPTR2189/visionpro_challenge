@@ -20,7 +20,7 @@ enum PortalExperience {
         let frontAnchor = AnchorEntity(.world(transform: matrix_identity_float4x4))
         frontAnchor.name = "PortalWorldAnchor"
         frontAnchor.position = [0, 1.15, -1.45]
-        frontAnchor.scale = [0.72, 0.72, 0.72]
+        frontAnchor.scale = [0.80, 0.80, 0.80]
 
         addLighting(to: frontAnchor)
         addPortal(to: frontAnchor)
@@ -472,7 +472,7 @@ enum PortalExperience {
         light.position = position + [0, 0, runtimeLightForwardOffset]
         light.light.color = .init(red: red, green: green, blue: blue, alpha: 1.0)
         light.light.intensity = 18_000
-        light.light.attenuationRadius = 1.05
+        light.light.attenuationRadius = runtimeLightAttenuationRadius
         light.isEnabled = false
         portal.addChild(light)
     }
@@ -482,6 +482,7 @@ enum PortalExperience {
     }
 
     private static let runtimeLightForwardOffset: Float = 0.9
+    private static let runtimeLightAttenuationRadius: Float = 0.38
 
     private static func portalCenterRunePosition(in portal: Entity) -> SIMD3<Float> {
         var center = runeLightBindings.reduce(SIMD3<Float>(repeating: 0)) { partialResult, rune in
