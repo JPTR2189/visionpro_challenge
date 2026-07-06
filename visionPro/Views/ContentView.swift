@@ -1,38 +1,26 @@
-//
-//  ContentView.swift
-//  visionPro
-//
-
 import SwiftUI
 
 struct ContentView: View {
-    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Esfera na Mão")
+            Text("Runic Portals")
                 .font(.largeTitle)
-                .bold()
+                .fontWeight(.semibold)
 
-            Text("Toque no botão abaixo para entrar no modo imersivo. Depois, vire a palma da mão direita para cima para fazer a esfera aparecer.")
-                .font(.body)
+            Text("Open the portal experience to begin mapping your environment.")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
 
-            ToggleImmersiveSpaceButton()
-
-            // Botão de DEBUG
-            Button("🧪 Forçar esfera aparecer (debug)") {
-                appModel.debugForceShow.toggle()
-            }
-            .font(.caption)
+            TogglePortalSpaceButton()
         }
-        .padding(40)
+        .frame(width: 380)
+        .padding(32)
     }
 }
 
-#Preview {
+#Preview(windowStyle: .automatic) {
     ContentView()
         .environment(AppModel())
 }

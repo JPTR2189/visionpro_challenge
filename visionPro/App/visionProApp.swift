@@ -1,36 +1,26 @@
-//
-//  visionProApp.swift
-//  visionPro
-//
-
 import SwiftUI
+import RealityKit
 
 @main
 struct visionProApp: App {
 
     @State private var appModel = AppModel()
 
-    var body: some Scene {
-        WindowGroup {
+    init() {
+        PortalRuneVisualSystem.registerRealityKitContent()
+    }
+
+    var body: some SwiftUI.Scene {
+        WindowGroup(id: "MainWindow") {
             ContentView()
                 .environment(appModel)
         }
 
-        ImmersiveSpace(id: appModel.immersiveSpaceID) {
-            HandSphereView()
+        ImmersiveSpace(id: appModel.portalSpaceID) {
+            PortalExperienceView()
                 .environment(appModel)
-                .onAppear {
-                    appModel.immersiveSpaceState = .open
-                }
-                .onDisappear {
-                    appModel.immersiveSpaceState = .closed
-                }
-                // 🔧 Reduz a visibilidade e intrusividade do botão de Home
-                // do visionOS durante a experiência imersiva.
-                // IMPORTANTE: não suprime completamente (requisito de segurança
-                // da Apple) — mas diminui muito a chance de ativação acidental
-                // durante o gesto de palma pra cima.
-                .persistentSystemOverlays(.hidden)
+                .onAppear   { appModel.portalSpaceState = .open   }
+                .onDisappear { appModel.portalSpaceState = .closed }
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }

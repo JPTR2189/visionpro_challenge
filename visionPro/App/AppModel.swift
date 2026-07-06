@@ -5,11 +5,10 @@
 
 import SwiftUI
 
-/// Maintains app-wide state
 @MainActor
 @Observable
 class AppModel {
-    let immersiveSpaceID = "ImmersiveSpace"
+    let portalSpaceID = "PortalExperienceSpace"
 
     enum ImmersiveSpaceState {
         case closed
@@ -17,13 +16,5 @@ class AppModel {
         case open
     }
 
-    var immersiveSpaceState = ImmersiveSpaceState.closed
-
-    var isPlaying: Bool {
-        immersiveSpaceState == .open
-    }
-
-    // 🧪 Temporário, só para testar a animação da esfera sem depender da mão.
-    // Remover esta propriedade quando o app estiver validado por completo.
-    var debugForceShow = false
+    var portalSpaceState: ImmersiveSpaceState = .closed
 }
