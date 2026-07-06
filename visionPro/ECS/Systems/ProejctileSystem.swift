@@ -16,9 +16,14 @@ class ProjectileSystem: System {
         for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
             guard let projectile = entity.components[ProjectileComponent.self] else { continue }
 
-            /// Destrói o a bola de fogo quando o tempo expirou
+            /// Destrói a bola de fogo e a âncora de mundo quando o tempo expirou
+
             if now - projectile.launchTime >= projectile.lifetime {
-                entity.removeFromParent()
+                if let anchor = entity.parent as? AnchorEntity {
+                    anchor.removeFromParent()
+                } else {
+                    entity.removeFromParent()
+                }
                 continue
             }
 

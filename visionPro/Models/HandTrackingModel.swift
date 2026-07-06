@@ -31,6 +31,10 @@ final class HandTrackingModel {
     var leftThrowTriggered = false
     var rightThrowDirection: SIMD3<Float> = [0, 0, -1]
     var leftThrowDirection: SIMD3<Float> = [0, 0, -1]
+
+    /// Posição da palma no espaço do mundo
+    var rightPalmWorldPosition: SIMD3<Float> = .zero
+    var leftPalmWorldPosition: SIMD3<Float> = .zero
     private var rightConsecutiveFramesForward = 0
     private var leftConsecutiveFramesForward = 0
 
@@ -40,8 +44,12 @@ final class HandTrackingModel {
     private let framesToConfirm = 10
     /// Frames para confirmar o arremesso
     private let framesToConfirmThrow = 5
-    /// Tolerância para movimento de lançar bola de fogo
-    private let framesToAbandonHold = 30
+    /// Tolerância para movimento de lançar bola de fogo (~1s a 90Hz)
+    private let framesToAbandonHold = 90
+
+    /// Usada para aceitar só arremessos para frente 
+    @ObservationIgnored
+    var deviceForwardProvider: (@MainActor () -> SIMD3<Float>?)?
 
     func start() async {
         guard HandTrackingProvider.isSupported else {
@@ -97,17 +105,32 @@ final class HandTrackingModel {
             : .zero
         
 
+        let palmWorldPosition = SIMD3<Float>(
+            wristTransform.columns.3.x,
+            wristTransform.columns.3.y,
+            wristTransform.columns.3.z
+        )
+
         await MainActor.run {
+            /// Só aceita o arremesso se a palma aponta para onde o usuário olha
+            let deviceForward = deviceForwardProvider?()
+            let isThrowForward = isForward
+                && (deviceForward.map { dot(throwDirection, $0) > 0.5 } ?? true)
+
             switch handAnchor.chirality {
             case .right:
                 rightPalmIsFacingUp = isUp
+                rightPalmWorldPosition = palmWorldPosition
                 updateDebounced(isUp, consecutiveFrames: &rightConsecutiveFramesUp) { rightSphereShouldAppear = $0 }
 
-                /// Sobe instantaneamente ao ver a palma pra cima, detectando o arremesso
+                /// A bola só é "segurada" depois de confirmada visualmente,
+                /// para o arremesso nunca disparar sem bola na mão
 
                 if isUp {
                     rightFramesSinceUp = 0
-                    rightSphereIsHeld = true
+                    if rightSphereShouldAppear {
+                        rightSphereIsHeld = true
+                    }
                 } else {
                     rightFramesSinceUp += 1
                     if rightFramesSinceUp > framesToAbandonHold {
@@ -116,7 +139,7 @@ final class HandTrackingModel {
                 }
 
                 updateThrowDetection(
-                    isForward: isForward,
+                    isForward: isThrowForward,
                     sphereIsActive: rightSphereIsHeld,
                     direction: throwDirection,
                     consecutiveFrames: &rightConsecutiveFramesForward
@@ -131,11 +154,14 @@ final class HandTrackingModel {
                 }
             case .left:
                 leftPalmIsFacingUp = isUp
+                leftPalmWorldPosition = palmWorldPosition
                 updateDebounced(isUp, consecutiveFrames: &leftConsecutiveFramesUp) { leftSphereShouldAppear = $0 }
 
                 if isUp {
                     leftFramesSinceUp = 0
-                    leftSphereIsHeld = true
+                    if leftSphereShouldAppear {
+                        leftSphereIsHeld = true
+                    }
                 } else {
                     leftFramesSinceUp += 1
                     if leftFramesSinceUp > framesToAbandonHold {
@@ -144,7 +170,7 @@ final class HandTrackingModel {
                 }
 
                 updateThrowDetection(
-                    isForward: isForward,
+                    isForward: isThrowForward,
                     sphereIsActive: leftSphereIsHeld,
                     direction: throwDirection,
                     consecutiveFrames: &leftConsecutiveFramesForward
@@ -177,7 +203,8 @@ final class HandTrackingModel {
         if isUp {
             consecutiveFrames = min(consecutiveFrames + 1, framesToConfirm + toleratedBadFrames)
         } else {
-            consecutiveFrames = max(consecutiveFrames - toleratedBadFrames, 0)
+            /// Decrementa 1 quando tiver frames ruins na utilização do gesto
+            consecutiveFrames = max(consecutiveFrames - 1, 0)
         }
 
         apply(consecutiveFrames > framesToConfirm)

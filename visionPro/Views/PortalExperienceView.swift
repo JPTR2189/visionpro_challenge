@@ -25,6 +25,12 @@ struct PortalExperienceView: View {
     /// Controlador de áudio
     @State private var rightAudioController: AudioPlaybackController?
     @State private var leftAudioController: AudioPlaybackController?
+
+    /// Tasks pendentes de mostrar/esconder a bola de fogo.
+    /// Precisam ser canceladas ao alternar o estado — senão uma Task
+    /// atrasada desabilita a entidade depois que ela já reapareceu.
+    @State private var rightVisibilityTask: Task<Void, Never>?
+    @State private var leftVisibilityTask: Task<Void, Never>?
     
     /// Entidade do áudio das bolas de fogo
     @State private var rightAudioEntity: Entity?
@@ -111,25 +117,46 @@ struct PortalExperienceView: View {
         .task { await processMeshUpdates() }
         .task { await processWallUpdates() }
         .task { await preparePortalTemplate() }
-        .task { await handModel.start() }
+        .task {
+            /// Fornece a direção do olhar (projetada no plano horizontal)
+            /// para o model validar se o arremesso é mesmo "para frente"
+            handModel.deviceForwardProvider = {
+                guard let transform = arSession.currentDeviceTransform() else { return nil }
+                let forward = -SIMD3<Float>(
+                    transform.columns.2.x,
+                    transform.columns.2.y,
+                    transform.columns.2.z
+                )
+                let horizontal = SIMD3<Float>(forward.x, 0, forward.z)
+                guard length(horizontal) > 0.001 else { return nil }
+                return normalize(horizontal)
+            }
+            await handModel.start()
+        }
         // ── Gestos: bola aparece/some na mão ──
         .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in
             showFireball(rightSphereEntity, audioEntity: rightAudioEntity,
-                         audioController: &rightAudioController, show: shouldAppear)
+                         audioController: &rightAudioController,
+                         visibilityTask: &rightVisibilityTask, show: shouldAppear)
         }
         .onChange(of: handModel.leftSphereShouldAppear) { _, shouldAppear in
             showFireball(leftSphereEntity, audioEntity: leftAudioEntity,
-                         audioController: &leftAudioController, show: shouldAppear)
+                         audioController: &leftAudioController,
+                         visibilityTask: &leftVisibilityTask, show: shouldAppear)
         }
         // ── Gestos: arremesso ──
         .onChange(of: handModel.rightThrowTriggered) { _, triggered in
             guard triggered else { return }
-            throwFireball(from: rightSphereEntity, direction: handModel.rightThrowDirection)
+            throwFireball(from: rightSphereEntity,
+                          at: handModel.rightPalmWorldPosition,
+                          direction: handModel.rightThrowDirection)
             handModel.resetThrowTrigger(isRight: true)
         }
         .onChange(of: handModel.leftThrowTriggered) { _, triggered in
             guard triggered else { return }
-            throwFireball(from: leftSphereEntity, direction: handModel.leftThrowDirection)
+            throwFireball(from: leftSphereEntity,
+                          at: handModel.leftPalmWorldPosition,
+                          direction: handModel.leftThrowDirection)
             handModel.resetThrowTrigger(isRight: false)
         }
         .onDisappear {
@@ -337,7 +364,10 @@ struct PortalExperienceView: View {
     private func showFireball(_ entity: Entity?,
                               audioEntity: Entity?,
                               audioController: inout AudioPlaybackController?,
+                              visibilityTask: inout Task<Void, Never>?,
                               show: Bool) {
+        visibilityTask?.cancel()
+
         if show {
             entity?.isEnabled = true
             animate(entity, show: true)
@@ -346,9 +376,9 @@ struct PortalExperienceView: View {
                 audioController = audioEntity.playAudio(resource)
             }
 
-            
-            Task {
+            visibilityTask = Task {
                 try? await Task.sleep(nanoseconds: animationDuration)
+                guard !Task.isCancelled else { return }
                 setRotation(on: entity, active: true)
             }
         } else {
@@ -357,8 +387,9 @@ struct PortalExperienceView: View {
             audioController = nil
             animate(entity, show: false)
 
-            Task {
+            visibilityTask = Task {
                 try? await Task.sleep(nanoseconds: animationDuration)
+                guard !Task.isCancelled else { return }
                 entity?.isEnabled = false
             }
         }
@@ -368,7 +399,11 @@ struct PortalExperienceView: View {
         guard let entity else { return }
         let scale = show ? targetScale : Float(0.001)
         entity.move(
-            to: Transform(scale: [scale, scale, scale], translation: palmOffset),
+            to: Transform(
+                scale: [scale, scale, scale],
+                rotation: entity.transform.rotation, // preserva a rotação atual
+                translation: palmOffset
+            ),
             relativeTo: entity.parent,
             duration: 0.3,
             timingFunction: .easeInOut
@@ -385,12 +420,13 @@ struct PortalExperienceView: View {
 
     // MARK: - Arremesso
 
-    /// Clona a bola no ponto atual da mão, ancora no MUNDO (não segue
-    /// mais a mão), e entrega ao ProjectileSystem (movimento + 6s de vida).
-    private func throwFireball(from handEntity: Entity?, direction: SIMD3<Float>) {
+    /// Clona a bola no ponto atual da mão e entrega ao ProjectileSystem (movimento + 6s de vida).
+    private func throwFireball(from handEntity: Entity?,
+                               at palmWorldPosition: SIMD3<Float>,
+                               direction: SIMD3<Float>) {
         print("---DEBUG FIREBALL CALLER---")
         print("   direction recebida: x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
-        print("   worldPos da mão:    \(handEntity?.position(relativeTo: nil) ?? .zero)")
+        print("   worldPos da palma:  \(palmWorldPosition)")
         guard let handEntity, let content = sceneContent else { return }
 
         guard length(direction) > 0.001 else {
@@ -398,9 +434,14 @@ struct PortalExperienceView: View {
             return
         }
 
+        guard length(palmWorldPosition) > 0.001 else {
+            print("⚠️ throwFireball: posição da palma ainda não rastreada.")
+            return
+        }
+
         let launchDirection = normalize(direction)
-        let handWorldPosition = handEntity.position(relativeTo: nil)
-        let spawnPosition = handWorldPosition + launchDirection * 0.12
+        /// palmOffset: nasce na mesma altura em que a bola flutua na mão
+        let spawnPosition = palmWorldPosition + palmOffset + launchDirection * 0.12
 
 
         let projectile = handEntity.clone(recursive: true)
@@ -409,39 +450,24 @@ struct PortalExperienceView: View {
 
         projectile.components.set(ProjectileComponent(direction: launchDirection))
 
+        projectile.components.set(
+            CollisionComponent(
+                shapes: [.generateSphere(radius: 0.05)],
+                mode: .trigger
+            )
+        )
+
         let worldAnchor = AnchorEntity(world: spawnPosition)
         projectile.position = [0, 0, 0]
         projectile.scale = [targetScale, targetScale, targetScale]
         projectile.isEnabled = true
-        
+
         worldAnchor.addChild(projectile)
         content.add(worldAnchor)
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 80_000_000)
-
-            guard projectile.parent != nil,
-                  projectile.components.has(ProjectileComponent.self) else {
-                return
-            }
-
-            projectile.components.set(
-                CollisionComponent(
-                    shapes: [.generateSphere(radius: 0.05)],
-                    mode: .trigger
-                )
-            )
-        }
 
         if let audioEntity = projectile.findEntity(named: "Sphere"),
            let resource = sharedAudioResource {
             audioEntity.playAudio(resource)
-        }
-
-        
-        Task {
-            try? await Task.sleep(nanoseconds: 6_500_000_000)
-            worldAnchor.removeFromParent()
         }
     }
 
