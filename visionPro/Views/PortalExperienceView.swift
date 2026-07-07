@@ -16,6 +16,11 @@ struct PortalExperienceView: View {
     @State private var currentSequence: [String] = []
     @State private var selectedIndex = 0
     @State private var isAcceptingRuneInput = false
+    @State private var isWaitingForClosingTap = false
+    @State private var isClosingPortal = false
+    @State private var currentRoundIndex = 0
+
+    private let roundSequenceLengths = [4, 6, 8]
 
     var body: some View {
         RealityView { content, attachments in
@@ -57,15 +62,26 @@ struct PortalExperienceView: View {
         let portal = PortalExperience.makeScene()
         portalScene = portal
         sceneRoot.addChild(portal)
-        PortalExperience.startFloatingStoneMotion(in: portal)
-        startNewRound(in: portal)
+
+        Task { @MainActor in
+            await PortalExperience.playOpeningAnimation(in: portal)
+            PortalExperience.startFloatingStoneMotion(in: portal)
+            startCurrentRound(in: portal)
+        }
     }
 
     @MainActor
-    private func startNewRound(in scene: Entity) {
+    private func startCurrentRound(in scene: Entity) {
+        guard currentRoundIndex < roundSequenceLengths.count else { return }
+
         isAcceptingRuneInput = false
+        isWaitingForClosingTap = false
+        isClosingPortal = false
+        PortalExperience.setClosingHitTargetEnabled(false, in: scene)
         selectedIndex = 0
-        currentSequence = PortalExperience.makeRandomRuneSequence()
+        currentSequence = PortalExperience.makeRandomRuneSequence(
+            length: roundSequenceLengths[currentRoundIndex]
+        )
 
         Task { @MainActor in
             PortalExperience.resetLights(in: scene)
@@ -77,6 +93,11 @@ struct PortalExperienceView: View {
 
     @MainActor
     private func handleRuneTap(_ entity: Entity) {
+        if isWaitingForClosingTap {
+            closePortalAfterFinalTap()
+            return
+        }
+
         guard isAcceptingRuneInput,
               let portalScene,
               selectedIndex < currentSequence.count,
@@ -105,13 +126,40 @@ struct PortalExperienceView: View {
                 if selectedIndex < currentSequence.count {
                     isAcceptingRuneInput = true
                 } else {
-                    try? await Task.sleep(nanoseconds: 700_000_000)
-                    startNewRound(in: portalScene)
+                    isWaitingForClosingTap = true
+                    PortalExperience.setClosingHitTargetEnabled(true, in: portalScene)
                 }
             } else {
                 try? await Task.sleep(nanoseconds: 500_000_000)
-                startNewRound(in: portalScene)
+                startCurrentRound(in: portalScene)
             }
+        }
+    }
+
+    @MainActor
+    private func closePortalAfterFinalTap() {
+        guard !isClosingPortal,
+              let portalScene else {
+            return
+        }
+
+        isClosingPortal = true
+        isWaitingForClosingTap = false
+        isAcceptingRuneInput = false
+        PortalExperience.setClosingHitTargetEnabled(false, in: portalScene)
+
+        Task { @MainActor in
+            await PortalExperience.playClosingAnimation(in: portalScene)
+            portalScene.removeFromParent()
+            self.portalScene = nil
+
+            currentRoundIndex += 1
+            guard currentRoundIndex < roundSequenceLengths.count else {
+                return
+            }
+
+            try? await Task.sleep(nanoseconds: 850_000_000)
+            addPortalExperienceIfNeeded()
         }
     }
 
