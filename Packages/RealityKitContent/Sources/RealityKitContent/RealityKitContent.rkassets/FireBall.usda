@@ -66,7 +66,7 @@ def Xform "Root"
             {
                 float directivityFocus = 0.012274305
                 float directLevel = 0
-                float gain = -4.0020833
+                float gain = -20
                 uniform token info:id = "RealityKit.SpatialAudio"
                 float reverbLevel = -9.865625
                 float rolloffFactor = 5
@@ -100,7 +100,7 @@ def Xform "Root"
 
             def RealityKitComponent "SpatialAudio"
             {
-                float gain = -20
+                float gain = -35
                 uniform token info:id = "RealityKit.SpatialAudio"
                 float rolloffFactor = 5
             }

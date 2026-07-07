@@ -15,8 +15,7 @@
     "objectMetadataList" : [
       [
         "1D572CEB-057A-41C3-B575-04C37501A3C0",
-        "Root",
-        "Sphere_Left"
+        "Root"
       ],
       {
         "isExpanded" : true,
@@ -24,7 +23,8 @@
       },
       [
         "1D572CEB-057A-41C3-B575-04C37501A3C0",
-        "Root"
+        "Root",
+        "Sphere_Left"
       ],
       {
         "isExpanded" : true,
@@ -46,7 +46,7 @@
       [
         "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
         "Root",
-        "SpatialAudio"
+        "FireSpawnSpatialAudio"
       ],
       {
         "isExpanded" : false,
@@ -70,7 +70,20 @@
       [
         "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
         "Root",
-        "FireSpawnSpatialAudio"
+        "Sphere",
+        "FireSpatialAudio"
+      ],
+      {
+        "isExpanded" : false,
+        "isLocked" : false,
+        "selectedAudioFilePrim" : {
+          "string" : "\/Root\/Sphere\/FireSpatialAudio\/fire_sound"
+        }
+      },
+      [
+        "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
+        "Root",
+        "SpatialAudio"
       ],
       {
         "isExpanded" : false,
@@ -86,19 +99,6 @@
       {
         "isExpanded" : true,
         "isLocked" : false
-      },
-      [
-        "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
-        "Root",
-        "Sphere",
-        "FireSpatialAudio"
-      ],
-      {
-        "isExpanded" : false,
-        "isLocked" : false,
-        "selectedAudioFilePrim" : {
-          "string" : "\/Root\/Sphere\/FireSpatialAudio\/fire_sound"
-        }
       },
       [
         "2D88C7F3-726E-4D83-B90E-BD4B18C70B71",
@@ -160,7 +160,8 @@
     "objectMetadataList" : [
       [
         "C52C73B1-C7AA-4DA7-A105-755CC082E026",
-        "Root"
+        "Root",
+        "Sphere"
       ],
       {
         "isExpanded" : true,
@@ -168,8 +169,7 @@
       },
       [
         "C52C73B1-C7AA-4DA7-A105-755CC082E026",
-        "Root",
-        "Sphere"
+        "Root"
       ],
       {
         "isExpanded" : true,
@@ -181,7 +181,8 @@
     "objectMetadataList" : [
       [
         "D66134B1-3681-4A8E-AFE5-29F257229F3B",
-        "Root"
+        "Root",
+        "Sphere"
       ],
       {
         "isExpanded" : true,
@@ -189,8 +190,7 @@
       },
       [
         "D66134B1-3681-4A8E-AFE5-29F257229F3B",
-        "Root",
-        "Sphere"
+        "Root"
       ],
       {
         "isExpanded" : true,
