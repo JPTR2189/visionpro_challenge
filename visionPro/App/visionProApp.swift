@@ -15,6 +15,9 @@ struct visionProApp: App {
             ContentView()
                 .environment(appModel)
                 .animation(.easeInOut(duration: 0.35), value: appModel.onboardingState)
+                .task {
+                    AudioManager.shared.playSoundTrack()
+                }
         }
         .defaultSize(width: 1300, height: 700)
         .windowStyle(.plain)
