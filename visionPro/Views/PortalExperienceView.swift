@@ -19,6 +19,7 @@ struct PortalExperienceView: View {
     @State private var isWaitingForClosingTap = false
     @State private var isClosingPortal = false
     @State private var currentRoundIndex = 0
+    @State private var windAudioController: AudioPlaybackController?
 
     private let roundSequenceLengths = [4, 6, 8]
 
@@ -38,6 +39,8 @@ struct PortalExperienceView: View {
             }
         }
         .onDisappear {
+            windAudioController?.stop()
+            AudioManager.shared.playClosePortal()
             openWindow(id: "MainWindow")
         }
         .gesture(
@@ -58,6 +61,14 @@ struct PortalExperienceView: View {
         sceneRoot.addChild(portal)
 
         Task { @MainActor in
+            if let windController = await playSpatialAudio(named: "Wind.flac", on: portal, loop: true) {
+                windAudioController = windController
+                windAudioController?.play()
+            }
+            if let openController = await playSpatialAudio(named: "Open Portal.wav", on: portal) {
+                openController.play()
+            }
+            
             await PortalExperience.playOpeningAnimation(in: portal)
             PortalExperience.startFloatingStoneMotion(in: portal)
             startCurrentRound(in: portal)
@@ -102,8 +113,14 @@ struct PortalExperienceView: View {
         let expectedRockName = currentSequence[selectedIndex]
         let isCorrect = selectedRockName == expectedRockName
         isAcceptingRuneInput = false
+        
+        let soundName = isCorrect ? "Rune Correct.flac" : "Rune Error.wav"
 
         Task { @MainActor in
+            if let runeController = await playSpatialAudio(named: soundName, on: entity) {
+                runeController.play()
+            }
+
             await PortalExperience.flashSelection(
                 for: selectedRockName,
                 in: portalScene,
@@ -143,6 +160,9 @@ struct PortalExperienceView: View {
         PortalExperience.setClosingHitTargetEnabled(false, in: portalScene)
 
         Task { @MainActor in
+            AudioManager.shared.playClosePortal()
+            windAudioController?.stop()
+            
             await PortalExperience.playClosingAnimation(in: portalScene)
             portalScene.removeFromParent()
             self.portalScene = nil
@@ -216,6 +236,17 @@ struct PortalExperienceView: View {
 
         sceneRoot.addChild(entity)
         meshEntities[anchor.id] = entity
+    }
+
+    private func playSpatialAudio(named name: String, on entity: Entity, loop: Bool = false) async -> AudioPlaybackController? {
+        var config = AudioFileResource.Configuration()
+        config.shouldLoop = loop
+        
+        guard let resource = try? await AudioFileResource(named: name, configuration: config) else {
+            print("Failed to load audio resource: \(name)")
+            return nil
+        }
+        return entity.prepareAudio(resource)
     }
 }
 
