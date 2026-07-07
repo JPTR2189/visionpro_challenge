@@ -57,8 +57,12 @@ struct PortalExperienceView: View {
         let portal = PortalExperience.makeScene()
         portalScene = portal
         sceneRoot.addChild(portal)
-        PortalExperience.startFloatingStoneMotion(in: portal)
-        startNewRound(in: portal)
+
+        Task { @MainActor in
+            await PortalExperience.playOpeningAnimation(in: portal)
+            PortalExperience.startFloatingStoneMotion(in: portal)
+            startNewRound(in: portal)
+        }
     }
 
     @MainActor

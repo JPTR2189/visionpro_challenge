@@ -57,6 +57,64 @@ enum PortalExperience {
         }
     }
 
+    static func playOpeningAnimation(in root: Entity) async {
+        guard let portal = root.findEntity(named: "MagicPortal") else { return }
+
+        resetPortalLights(in: root)
+
+        var floatingStones: [Entity] = []
+        collectFloatingStones(from: portal, into: &floatingStones)
+        let orderedStones = sortedOpeningStones(floatingStones)
+
+        let originalPortalTransform = portal.transform
+        let originalStoneTransforms = orderedStones.map { stone in
+            (stone: stone, transform: stone.transform)
+        }
+        let center = portalCenterRunePosition(in: portal)
+
+        var collapsedPortalTransform = originalPortalTransform
+        collapsedPortalTransform.scale = originalPortalTransform.scale * openingInitialScale
+        portal.transform = collapsedPortalTransform
+
+        for (index, item) in originalStoneTransforms.enumerated() {
+            let startOffset = openingRuneCenterOffset(index: index, count: originalStoneTransforms.count)
+            item.stone.transform = Transform(
+                scale: item.transform.scale * openingRuneCenterScale,
+                rotation: item.transform.rotation,
+                translation: center + startOffset
+            )
+        }
+
+        portal.move(
+            to: originalPortalTransform,
+            relativeTo: portal.parent,
+            duration: openingPortalDuration,
+            timingFunction: .easeInOut
+        )
+
+        try? await Task.sleep(nanoseconds: openingRuneRevealDelay)
+
+        for item in originalStoneTransforms {
+            item.stone.move(
+                to: item.transform,
+                relativeTo: item.stone.parent,
+                duration: openingRuneMoveDuration,
+                timingFunction: .easeInOut
+            )
+
+            try? await Task.sleep(nanoseconds: openingRuneStaggerDuration)
+        }
+
+        try? await Task.sleep(nanoseconds: openingFinalSettleDuration)
+
+        portal.transform = originalPortalTransform
+        for item in originalStoneTransforms {
+            item.stone.transform = item.transform
+        }
+
+        resetPortalLights(in: root)
+    }
+
     static func startGeniusLightSequence(in root: Entity) {
         Task { @MainActor in
             resetPortalLights(in: root)
@@ -295,7 +353,8 @@ enum PortalExperience {
         guard let interior = makePortalInterior() else { return }
 
         interior.name = "PortalInterior"
-        interior.position = [0, 0, -0.16]
+        interior.position = portalCenterRunePosition(in: portal) + portalInteriorOffset
+        interior.orientation = simd_quatf(angle: -.pi / 2, axis: [0, 1, 0])
         portal.addChild(interior)
     }
 
@@ -319,8 +378,7 @@ enum PortalExperience {
         let bounds = interior.visualBounds(relativeTo: interior)
         let largestExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
         if largestExtent > 0 {
-            let targetSize: Float = 0.88
-            let normalizedScale = targetSize / largestExtent
+            let normalizedScale = portalInteriorTargetSize / largestExtent
             interior.scale = [normalizedScale, normalizedScale, normalizedScale]
             interior.position -= bounds.center * normalizedScale
         }
@@ -494,6 +552,43 @@ enum PortalExperience {
     }
 
     private static let portalCenterDepth: Float = -0.22
+    private static let portalInteriorTargetSize: Float = 3.22
+    private static let portalInteriorOffset = SIMD3<Float>(0, 0, -0.10)
+    private static let openingInitialScale: Float = 0.02
+    private static let openingPortalDuration: TimeInterval = 2.7
+    private static let openingRuneMoveDuration: TimeInterval = 0.82
+    private static let openingRuneCenterScale: Float = 0.18
+    private static let openingRuneCenterRadius: Float = 0.16
+    private static let openingRuneCenterDepthOffset: Float = 0.10
+    private static let openingRuneRevealDelay: UInt64 = 260_000_000
+    private static let openingRuneStaggerDuration: UInt64 = 340_000_000
+    private static let openingFinalSettleDuration: UInt64 = 960_000_000
+
+    private static func sortedOpeningStones(_ stones: [Entity]) -> [Entity] {
+        let runeOrder = Dictionary(
+            uniqueKeysWithValues: runeLightBindings.enumerated().map { index, rune in
+                (rune.rockName, index)
+            }
+        )
+
+        return stones.sorted {
+            (runeOrder[$0.name.uppercased()] ?? Int.max) < (runeOrder[$1.name.uppercased()] ?? Int.max)
+        }
+    }
+
+    private static func openingRuneCenterOffset(
+        index: Int,
+        count: Int
+    ) -> SIMD3<Float> {
+        guard count > 0 else { return [0, 0, openingRuneCenterDepthOffset] }
+
+        let angle = (Float(index) / Float(count)) * .pi * 2
+        return [
+            cos(angle) * openingRuneCenterRadius,
+            sin(angle) * openingRuneCenterRadius,
+            openingRuneCenterDepthOffset
+        ]
+    }
 
     private static func referenceRuneVisualCenter(in portal: Entity) -> SIMD3<Float> {
         let pivotTarget = portalCenterRunePosition(in: portal)
