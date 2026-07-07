@@ -17,6 +17,7 @@ struct visionProApp: App {
                 .animation(.easeInOut(duration: 0.35), value: appModel.onboardingState)
         }
         .defaultSize(width: 1300, height: 700)
+        .windowStyle(.plain)
 
         ImmersiveSpace(id: appModel.portalSpaceID) {
             PortalExperienceView()

@@ -14,6 +14,12 @@ class AppModel {
     enum OnboardingState: Equatable {
         case hero
         case tutorial(step: TutorialStep)
+        case roomScanning(step: RoomScanningStep)
+    }
+
+    enum RoomScanningStep: Int, CaseIterable, Equatable {
+        case start
+        case progress
         case done
     }
 
@@ -40,4 +46,7 @@ class AppModel {
 
     var portalSpaceState: ImmersiveSpaceState = .closed
     var onboardingState: OnboardingState = .hero
+
+    let arSession = ARKitSessionManager()
+    var shouldRevealEnvironment = false
 }
