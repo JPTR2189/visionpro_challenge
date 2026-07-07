@@ -74,7 +74,7 @@
         "FireSpatialAudio"
       ],
       {
-        "isExpanded" : false,
+        "isExpanded" : true,
         "isLocked" : false,
         "selectedAudioFilePrim" : {
           "string" : "\/Root\/Sphere\/FireSpatialAudio\/fire_sound"

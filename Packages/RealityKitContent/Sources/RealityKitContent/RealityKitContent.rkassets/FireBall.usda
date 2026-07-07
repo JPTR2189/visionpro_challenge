@@ -64,12 +64,12 @@ def Xform "Root"
 
             def RealityKitComponent "SpatialAudio"
             {
-                float directivityFocus = 0.012274305
+                float directivityFocus = 0
                 float directLevel = 0
-                float gain = -20
+                float gain = -45
                 uniform token info:id = "RealityKit.SpatialAudio"
-                float reverbLevel = -9.865625
-                float rolloffFactor = 5
+                float reverbLevel = -10
+                float rolloffFactor = -27.661459
             }
 
             def RealityKitAudioFile "fire_sound"
@@ -100,7 +100,7 @@ def Xform "Root"
 
             def RealityKitComponent "SpatialAudio"
             {
-                float gain = -35
+                float gain = -55.002083
                 uniform token info:id = "RealityKit.SpatialAudio"
                 float rolloffFactor = 5
             }
@@ -108,6 +108,7 @@ def Xform "Root"
             def RealityKitAudioFile "spawn_fire"
             {
                 uniform asset file = @spawn-fire.mp3@
+                uniform token loadingStrategy = "Preload"
                 uniform bool shouldLoop = 0
             }
         }
