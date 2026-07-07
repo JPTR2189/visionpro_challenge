@@ -46,7 +46,10 @@ class AppModel {
 
     var portalSpaceState: ImmersiveSpaceState = .closed
     var onboardingState: OnboardingState = .hero
+    var isGameOver = false
+    var isRitualComplete = false
 
     let arSession = ARKitSessionManager()
     var shouldRevealEnvironment = false
+    var shouldOpenMainWindowOnImmersiveDisappear = true
 }
