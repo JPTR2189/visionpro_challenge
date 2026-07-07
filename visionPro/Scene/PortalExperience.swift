@@ -115,6 +115,78 @@ enum PortalExperience {
         resetPortalLights(in: root)
     }
 
+    static func playClosingAnimation(in root: Entity) async {
+        guard let portal = root.findEntity(named: "MagicPortal") else { return }
+
+        resetPortalLights(in: root)
+
+        var floatingStones: [Entity] = []
+        collectFloatingStones(from: portal, into: &floatingStones)
+        let orderedStones = sortedOpeningStones(floatingStones)
+        let center = portalCenterRunePosition(in: portal)
+        let closingCenter = center + closingSmokeOffset
+
+        if let smoke = makePortalSmoke(targetSize: closingSmokeTargetSize) {
+            let smokePosition = portal.convert(
+                position: closingCenter,
+                to: portal.parent
+            )
+            smoke.position = smokePosition
+            smoke.scale *= closingSmokeInitialScale
+            portal.parent?.addChild(smoke)
+
+            for animation in smoke.availableAnimations {
+                smoke.playAnimation(animation.repeat())
+            }
+
+            smoke.move(
+                to: Transform(
+                    scale: smoke.scale * closingSmokeFinalScale,
+                    rotation: smoke.orientation,
+                    translation: smokePosition
+                ),
+                relativeTo: smoke.parent,
+                duration: closingSmokeDuration,
+                timingFunction: .easeInOut
+            )
+        }
+
+        try? await Task.sleep(nanoseconds: closingSmokeLeadDuration)
+
+        for (index, stone) in orderedStones.enumerated() {
+            stone.components.remove(InputTargetComponent.self)
+            stone.components.remove(HoverEffectComponent.self)
+            stone.components.remove(CollisionComponent.self)
+
+            let offset = openingRuneCenterOffset(index: index, count: orderedStones.count)
+            stone.move(
+                to: Transform(
+                    scale: stone.scale * closingRuneCenterScale,
+                    rotation: stone.orientation,
+                    translation: center + offset
+                ),
+                relativeTo: stone.parent,
+                duration: closingRuneMoveDuration,
+                timingFunction: .easeInOut
+            )
+        }
+
+        let collapsedPortalTransform = scaledTransform(
+            for: portal,
+            keepingLocalPoint: closingCenter,
+            scaleFactor: closingPortalFinalScale
+        )
+        portal.move(
+            to: collapsedPortalTransform,
+            relativeTo: portal.parent,
+            duration: closingPortalDuration,
+            timingFunction: .easeInOut
+        )
+
+        try? await Task.sleep(nanoseconds: closingSettleDuration)
+        portal.isEnabled = false
+    }
+
     static func startGeniusLightSequence(in root: Entity) {
         Task { @MainActor in
             resetPortalLights(in: root)
@@ -208,6 +280,10 @@ enum PortalExperience {
 
     static func resetLights(in root: Entity) {
         resetPortalLights(in: root)
+    }
+
+    static func setClosingHitTargetEnabled(_ isEnabled: Bool, in root: Entity) {
+        root.findEntity(named: closingHitTargetName)?.isEnabled = isEnabled
     }
 
     static func rockName(containing entity: Entity) -> String? {
@@ -343,6 +419,7 @@ enum PortalExperience {
 
         addPortalInterior(to: portal)
         configureFloatingStones(in: portal)
+        configureClosingHitTarget(in: portal)
         configureRuntimePortalLights(in: portal)
         resetPortalLights(in: portal)
 
@@ -385,6 +462,34 @@ enum PortalExperience {
 
         container.addChild(interior)
         return container
+    }
+
+    private static func makePortalSmoke(targetSize: Float) -> Entity? {
+        let smokeURL =
+            Bundle.main.url(
+                forResource: "Evanescent_Smoke",
+                withExtension: "usdz",
+                subdirectory: "Resources"
+            ) ?? Bundle.main.url(
+                forResource: "Evanescent_Smoke",
+                withExtension: "usdz"
+            )
+
+        guard let smokeURL,
+              let smoke = try? Entity.load(contentsOf: smokeURL) else {
+            return nil
+        }
+
+        smoke.name = "PortalClosingSmoke"
+        let bounds = smoke.visualBounds(relativeTo: smoke)
+        let largestExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
+        if largestExtent > 0 {
+            let normalizedScale = targetSize / largestExtent
+            smoke.scale = [normalizedScale, normalizedScale, normalizedScale]
+            smoke.position -= bounds.center * normalizedScale
+        }
+
+        return smoke
     }
 
     private static func playLightSequence(_ sequence: [RuneLightBinding], in root: Entity) async {
@@ -563,6 +668,20 @@ enum PortalExperience {
     private static let openingRuneRevealDelay: UInt64 = 260_000_000
     private static let openingRuneStaggerDuration: UInt64 = 340_000_000
     private static let openingFinalSettleDuration: UInt64 = 960_000_000
+    private static let closingSmokeTargetSize: Float = 2.15
+    private static let closingSmokeInitialScale: Float = 0.35
+    private static let closingSmokeFinalScale: Float = 1.35
+    private static let closingSmokeOffset = SIMD3<Float>(0, 0, 0.46)
+    private static let closingSmokeDuration: TimeInterval = 1.55
+    private static let closingSmokeLeadDuration: UInt64 = 180_000_000
+    private static let closingRuneMoveDuration: TimeInterval = 0.58
+    private static let closingRuneCenterScale: Float = 0.16
+    private static let closingPortalDuration: TimeInterval = 0.86
+    private static let closingPortalFinalScale: Float = 0.02
+    private static let closingSettleDuration: UInt64 = 1_120_000_000
+    private static let closingHitTargetRadius: Float = 2.05
+    private static let closingHitTargetOffset = SIMD3<Float>(0, 0, 0.30)
+    private static let closingHitTargetName = "PortalClosingHitTarget"
 
     private static func sortedOpeningStones(_ stones: [Entity]) -> [Entity] {
         let runeOrder = Dictionary(
@@ -588,6 +707,45 @@ enum PortalExperience {
             sin(angle) * openingRuneCenterRadius,
             openingRuneCenterDepthOffset
         ]
+    }
+
+    private static func scaledTransform(
+        for entity: Entity,
+        keepingLocalPoint localPoint: SIMD3<Float>,
+        scaleFactor: Float
+    ) -> Transform {
+        let transform = entity.transform
+        let targetScale = transform.scale * scaleFactor
+        let targetPoint = transformedPoint(
+            localPoint,
+            scale: transform.scale,
+            rotation: transform.rotation,
+            translation: transform.translation
+        )
+        let scaledPointOffset = transform.rotation.act([
+            localPoint.x * targetScale.x,
+            localPoint.y * targetScale.y,
+            localPoint.z * targetScale.z
+        ])
+
+        return Transform(
+            scale: targetScale,
+            rotation: transform.rotation,
+            translation: targetPoint - scaledPointOffset
+        )
+    }
+
+    private static func transformedPoint(
+        _ point: SIMD3<Float>,
+        scale: SIMD3<Float>,
+        rotation: simd_quatf,
+        translation: SIMD3<Float>
+    ) -> SIMD3<Float> {
+        translation + rotation.act([
+            point.x * scale.x,
+            point.y * scale.y,
+            point.z * scale.z
+        ])
     }
 
     private static func referenceRuneVisualCenter(in portal: Entity) -> SIMD3<Float> {
@@ -660,6 +818,21 @@ enum PortalExperience {
                 shapes: [shape]
             )
         )
+    }
+
+    private static func configureClosingHitTarget(in portal: Entity) {
+        let target = Entity()
+        target.name = closingHitTargetName
+        target.position = portalCenterRunePosition(in: portal) + closingHitTargetOffset
+        target.isEnabled = false
+        target.components.set(InputTargetComponent(allowedInputTypes: .indirect))
+        target.components.set(
+            CollisionComponent(
+                shapes: [.generateSphere(radius: closingHitTargetRadius)]
+            )
+        )
+
+        portal.addChild(target)
     }
 
     private static func collectFloatingStones(from entity: Entity, into result: inout [Entity]) {

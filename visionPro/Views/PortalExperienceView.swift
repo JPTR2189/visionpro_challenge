@@ -16,6 +16,8 @@ struct PortalExperienceView: View {
     @State private var currentSequence: [String] = []
     @State private var selectedIndex = 0
     @State private var isAcceptingRuneInput = false
+    @State private var isWaitingForClosingTap = false
+    @State private var isClosingPortal = false
 
     var body: some View {
         RealityView { content, attachments in
@@ -68,6 +70,9 @@ struct PortalExperienceView: View {
     @MainActor
     private func startNewRound(in scene: Entity) {
         isAcceptingRuneInput = false
+        isWaitingForClosingTap = false
+        isClosingPortal = false
+        PortalExperience.setClosingHitTargetEnabled(false, in: scene)
         selectedIndex = 0
         currentSequence = PortalExperience.makeRandomRuneSequence()
 
@@ -81,6 +86,11 @@ struct PortalExperienceView: View {
 
     @MainActor
     private func handleRuneTap(_ entity: Entity) {
+        if isWaitingForClosingTap {
+            closePortalAfterFinalTap()
+            return
+        }
+
         guard isAcceptingRuneInput,
               let portalScene,
               selectedIndex < currentSequence.count,
@@ -109,13 +119,32 @@ struct PortalExperienceView: View {
                 if selectedIndex < currentSequence.count {
                     isAcceptingRuneInput = true
                 } else {
-                    try? await Task.sleep(nanoseconds: 700_000_000)
-                    startNewRound(in: portalScene)
+                    isWaitingForClosingTap = true
+                    PortalExperience.setClosingHitTargetEnabled(true, in: portalScene)
                 }
             } else {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 startNewRound(in: portalScene)
             }
+        }
+    }
+
+    @MainActor
+    private func closePortalAfterFinalTap() {
+        guard !isClosingPortal,
+              let portalScene else {
+            return
+        }
+
+        isClosingPortal = true
+        isWaitingForClosingTap = false
+        isAcceptingRuneInput = false
+        PortalExperience.setClosingHitTargetEnabled(false, in: portalScene)
+
+        Task { @MainActor in
+            await PortalExperience.playClosingAnimation(in: portalScene)
+            portalScene.removeFromParent()
+            self.portalScene = nil
         }
     }
 
