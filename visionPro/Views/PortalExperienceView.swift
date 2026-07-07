@@ -55,9 +55,11 @@ struct PortalExperienceView: View {
 
         let portal = PortalExperience.makeScene()
         portalScene = portal
-        sceneRoot.addChild(portal)
 
         Task { @MainActor in
+            // addChild happens in the same synchronous block as the collapse setup
+            // inside playOpeningAnimation — no frame is rendered in between
+            sceneRoot.addChild(portal)
             await PortalExperience.playOpeningAnimation(in: portal)
             PortalExperience.startFloatingStoneMotion(in: portal)
             startCurrentRound(in: portal)
@@ -125,9 +127,30 @@ struct PortalExperienceView: View {
                 }
             } else {
                 try? await Task.sleep(nanoseconds: 500_000_000)
-                startCurrentRound(in: portalScene)
+                showGameOver()
             }
         }
+    }
+
+    @MainActor
+    private func showGameOver() {
+        isAcceptingRuneInput = false
+        isWaitingForClosingTap = false
+        isClosingPortal = false
+        currentSequence = []
+        selectedIndex = 0
+        currentRoundIndex = 0
+        appModel.isRitualComplete = false
+
+        if let portalScene {
+            PortalExperience.resetLights(in: portalScene)
+            PortalExperience.setClosingHitTargetEnabled(false, in: portalScene)
+            portalScene.removeFromParent()
+            self.portalScene = nil
+        }
+
+        appModel.isGameOver = true
+        openWindow(id: "MainWindow")
     }
 
     @MainActor
@@ -149,12 +172,27 @@ struct PortalExperienceView: View {
 
             currentRoundIndex += 1
             guard currentRoundIndex < roundSequenceLengths.count else {
+                showRitualComplete()
                 return
             }
 
             try? await Task.sleep(nanoseconds: 850_000_000)
             addPortalExperienceIfNeeded()
         }
+    }
+
+    @MainActor
+    private func showRitualComplete() {
+        isAcceptingRuneInput = false
+        isWaitingForClosingTap = false
+        isClosingPortal = false
+        currentSequence = []
+        selectedIndex = 0
+        currentRoundIndex = 0
+
+        appModel.isGameOver = false
+        appModel.isRitualComplete = true
+        openWindow(id: "MainWindow")
     }
 
     // MARK: - Room Tracking: aguarda cômodo completo
@@ -174,7 +212,7 @@ struct PortalExperienceView: View {
             switch update.event {
             case .added, .updated:
                 appModel.arSession.updateMeshAnchor(update.anchor)
-                
+
                 if appModel.arSession.mappingState != .active {
                     refreshMeshEntity(for: update.anchor)
                 }
@@ -191,7 +229,7 @@ struct PortalExperienceView: View {
     @MainActor
     private func revealEnvironment() {
         appModel.arSession.reveal()
-        
+
         for anchor in appModel.arSession.scannedMeshAnchors.values {
             refreshMeshEntity(for: anchor)
         }
@@ -202,7 +240,7 @@ struct PortalExperienceView: View {
     @MainActor
     private func refreshMeshEntity(for anchor: MeshAnchor) {
         meshEntities[anchor.id]?.removeFromParent()
-        
+
         let isFinal = (appModel.arSession.mappingState == .active)
         let wMat = isFinal ? wallMaterial : scanningMaterial
         let fMat = isFinal ? floorMaterial : scanningMaterial
@@ -217,6 +255,7 @@ struct PortalExperienceView: View {
         sceneRoot.addChild(entity)
         meshEntities[anchor.id] = entity
     }
+
 }
 
 #Preview(immersionStyle: .mixed) {
