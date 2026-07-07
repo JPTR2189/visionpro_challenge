@@ -4,6 +4,8 @@ import RealityKitContent
 
 struct PortalExperienceView: View {
 
+    @Environment(AppModel.self) private var appModel
+
     @State private var sceneRoot = Entity()
 
     /// Tracking das mãos
@@ -27,7 +29,15 @@ struct PortalExperienceView: View {
     @State private var rightAudioEntity: Entity?
     @State private var leftAudioEntity: Entity?
 
+    /// Bola de fogo de DEBUG: fixa no mundo, controlada pelo ToggleDebugButton
+    @State private var debugSphereEntity: Entity?
+    @State private var debugAudioEntity: Entity?
+    @State private var debugAudioController: AudioPlaybackController?
+    @State private var debugVisibilityTask: Task<Void, Never>?
+
+    /// Som contínuo de fogo (loop) e som de surgimento (uma vez por spawn)
     @State private var sharedAudioResource: AudioFileResource?
+    @State private var spawnAudioResource: AudioFileResource?
 
     private let targetScale: Float = 0.05
     private let palmOffset: SIMD3<Float> = [0, 0.1, 0]
@@ -38,14 +48,26 @@ struct PortalExperienceView: View {
             content.add(sceneRoot)
 
             /// Áudio compartilhado para as bolas de fogos
+            /// (o USDA renomeou "fireSound" → "fire_sound" na branch de áudio)
             if let resource = try? await AudioFileResource(
-                named: "/Root/Sphere/FireSpatialAudio/fireSound",
+                named: "/Root/Sphere/FireSpatialAudio/fire_sound",
                 from: "FireBall.usda",
                 in: realityKitContentBundle
             ) {
                 sharedAudioResource = resource
             } else {
                 print("⚠️ Não consegui carregar o áudio da FireBall.")
+            }
+
+            /// Áudio espacial do surgimento da bola (feat/spatial-audio)
+            if let resource = try? await AudioFileResource(
+                named: "/Root/Sphere/FireSpawnSpatialAudio/spawn_fire",
+                from: "FireBall.usda",
+                in: realityKitContentBundle
+            ) {
+                spawnAudioResource = resource
+            } else {
+                print("⚠️ Não consegui carregar o áudio de spawn da FireBall.")
             }
 
             // ── Bola de fogo: mão DIREITA (rotação horária) ──
@@ -77,6 +99,27 @@ struct PortalExperienceView: View {
             } else {
                 print("❌ FireBall (esquerda) não carregou.")
             }
+
+            // ── Bola de fogo de DEBUG: fixa à frente do usuário ──
+            if let debugFireBall = try? await Entity(named: "FireBall", in: realityKitContentBundle) {
+                let worldAnchor = AnchorEntity(world: [0, 1.2, -0.5])
+                debugFireBall.scale = [0.001, 0.001, 0.001]
+                debugFireBall.components.set(RotationComponent(angularSpeed: RotationComponent.clockwise))
+                debugFireBall.isEnabled = false
+                worldAnchor.addChild(debugFireBall)
+                content.add(worldAnchor)
+                debugSphereEntity = debugFireBall
+                debugAudioEntity = debugFireBall.findEntity(named: "Sphere")
+
+                if appModel.debugForceShow {
+                    showFireball(debugSphereEntity, audioEntity: debugAudioEntity,
+                                 audioController: &debugAudioController,
+                                 visibilityTask: &debugVisibilityTask,
+                                 show: true, translation: [0, 0, 0])
+                }
+            } else {
+                print("❌ FireBall (debug) não carregou.")
+            }
         }
         .task {
             /// Fornece a direção do olhar (projetada no plano horizontal)
@@ -99,12 +142,21 @@ struct PortalExperienceView: View {
         .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in
             showFireball(rightSphereEntity, audioEntity: rightAudioEntity,
                          audioController: &rightAudioController,
-                         visibilityTask: &rightVisibilityTask, show: shouldAppear)
+                         visibilityTask: &rightVisibilityTask,
+                         show: shouldAppear, translation: palmOffset)
         }
         .onChange(of: handModel.leftSphereShouldAppear) { _, shouldAppear in
             showFireball(leftSphereEntity, audioEntity: leftAudioEntity,
                          audioController: &leftAudioController,
-                         visibilityTask: &leftVisibilityTask, show: shouldAppear)
+                         visibilityTask: &leftVisibilityTask,
+                         show: shouldAppear, translation: palmOffset)
+        }
+        // ── Debug: bola fixa à frente do usuário ──
+        .onChange(of: appModel.debugForceShow) { _, shouldAppear in
+            showFireball(debugSphereEntity, audioEntity: debugAudioEntity,
+                         audioController: &debugAudioController,
+                         visibilityTask: &debugVisibilityTask,
+                         show: shouldAppear, translation: [0, 0, 0])
         }
         // ── Gestos: arremesso ──
         .onChange(of: handModel.rightThrowTriggered) { _, triggered in
@@ -129,27 +181,40 @@ struct PortalExperienceView: View {
                               audioEntity: Entity?,
                               audioController: inout AudioPlaybackController?,
                               visibilityTask: inout Task<Void, Never>?,
-                              show: Bool) {
+                              show: Bool,
+                              translation: SIMD3<Float>) {
         visibilityTask?.cancel()
 
         if show {
             entity?.isEnabled = true
-            animate(entity, show: true)
+            animate(entity, show: true, translation: translation)
 
-            if let audioEntity, let resource = sharedAudioResource {
-                audioController = audioEntity.playAudio(resource)
+            /// Som de spawn imediato, a cada aparição
+            if let audioEntity, let spawnResource = spawnAudioResource {
+                audioEntity.playAudio(spawnResource)
             }
 
-            visibilityTask = Task {
+            /// Loop de fogo preparado agora, disparado 1s após o spawn
+            var fireController: AudioPlaybackController?
+            if let audioEntity, let resource = sharedAudioResource {
+                fireController = audioEntity.prepareAudio(resource)
+            }
+            audioController = fireController
+
+            visibilityTask = Task { [fireController] in
                 try? await Task.sleep(nanoseconds: animationDuration)
                 guard !Task.isCancelled else { return }
                 setRotation(on: entity, active: true)
+
+                try? await Task.sleep(nanoseconds: 1_000_000_000 - animationDuration)
+                guard !Task.isCancelled else { return }
+                fireController?.play()
             }
         } else {
             setRotation(on: entity, active: false)
             audioController?.stop()
             audioController = nil
-            animate(entity, show: false)
+            animate(entity, show: false, translation: translation)
 
             visibilityTask = Task {
                 try? await Task.sleep(nanoseconds: animationDuration)
@@ -159,14 +224,14 @@ struct PortalExperienceView: View {
         }
     }
 
-    private func animate(_ entity: Entity?, show: Bool) {
+    private func animate(_ entity: Entity?, show: Bool, translation: SIMD3<Float>) {
         guard let entity else { return }
         let scale = show ? targetScale : Float(0.001)
         entity.move(
             to: Transform(
                 scale: [scale, scale, scale],
                 rotation: entity.transform.rotation, // preserva a rotação atual
-                translation: palmOffset
+                translation: translation
             ),
             relativeTo: entity.parent,
             duration: 0.3,

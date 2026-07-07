@@ -27,5 +27,6 @@ struct visionProApp: App {
                 .persistentSystemOverlays(.hidden)
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
+        
     }
 }

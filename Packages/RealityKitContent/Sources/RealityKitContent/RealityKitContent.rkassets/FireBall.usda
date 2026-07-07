@@ -12,7 +12,7 @@ reorder rootPrims = ["Root", "SpatialAudio"]
 
 def Xform "Root"
 {
-    reorder nameChildren = ["Sphere", "FireBallMaterial", "UpLight", "DownLight", "Fire"]
+    reorder nameChildren = ["Sphere", "FireBallMaterial", "Fire"]
     def Material "FireBallMaterial"
     {
         token outputs:mtlx:surface
@@ -38,7 +38,7 @@ def Xform "Root"
         references = @Sphere.usdz@
     )
     {
-        reorder nameChildren = ["Materials", "Meshes", "FireSpatialAudio"]
+        reorder nameChildren = ["Materials", "Meshes", "FireSpatialAudio", "SpatialAudio", "FireSpawnSpatialAudio"]
         rel material:binding = </Root/FireBallMaterial> (
             bindMaterialAs = "weakerThanDescendants"
         )
@@ -53,7 +53,7 @@ def Xform "Root"
             }
         )
         {
-            reorder nameChildren = ["SpatialAudio", "fireSound"]
+            reorder nameChildren = ["SpatialAudio", "fire_sound"]
             rel material:binding = </Root/FireBallMaterial> (
                 bindMaterialAs = "weakerThanDescendants"
             )
@@ -72,7 +72,7 @@ def Xform "Root"
                 float rolloffFactor = 5
             }
 
-            def RealityKitAudioFile "fireSound"
+            def RealityKitAudioFile "fire_sound"
             {
                 uniform token calibrationMode = "relative"
                 uniform asset file = @fire.mp3@
@@ -88,6 +88,28 @@ def Xform "Root"
             float gain = -5
             uniform token info:id = "RealityKit.SpatialAudio"
             float rolloffFactor = 5
+        }
+
+        def Xform "FireSpawnSpatialAudio"
+        {
+            reorder nameChildren = ["spawn_fire", "spawn_fire", "SpatialAudio"]
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (100, 100, 100)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def RealityKitComponent "SpatialAudio"
+            {
+                float gain = -20
+                uniform token info:id = "RealityKit.SpatialAudio"
+                float rolloffFactor = 5
+            }
+
+            def RealityKitAudioFile "spawn_fire"
+            {
+                uniform asset file = @spawn-fire.mp3@
+                uniform bool shouldLoop = 0
+            }
         }
     }
 

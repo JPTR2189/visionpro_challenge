@@ -14,13 +14,9 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            
             TogglePortalSpaceButton()
 
-            Button("🧪 Forçar esfera aparecer (debug)") {
-                appModel.debugForceShow.toggle()
-            }
-            .font(.caption)
+            ToggleDebugButton()
         }
         .frame(width: 380)
         .padding(32)

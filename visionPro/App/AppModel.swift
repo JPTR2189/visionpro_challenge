@@ -15,6 +15,6 @@ final class AppModel {
         portalSpaceState == .open
     }
 
-    
+    /// Modo debug: exibe uma bola de fogo fixa à frente do usuário
     var debugForceShow = false
 }
