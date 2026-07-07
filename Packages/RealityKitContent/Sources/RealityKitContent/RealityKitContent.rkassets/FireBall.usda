@@ -1,0 +1,158 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "Reality Composer Pro Version 2.0 (494.8.1)"
+    }
+    defaultPrim = "Root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+reorder rootPrims = ["Root", "SpatialAudio"]
+
+def Xform "Root"
+{
+    reorder nameChildren = ["Sphere", "FireBallMaterial", "Fire"]
+    def Material "FireBallMaterial"
+    {
+        token outputs:mtlx:surface
+        token outputs:realitykit:vertex
+        token outputs:surface.connect = </Root/FireBallMaterial/UsdPreviewSurface.outputs:surface>
+
+        def Shader "UsdPreviewSurface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.59707034, 0.23058249, 0.12861337) (
+                colorSpace = "srgb_displayp3"
+            )
+            token outputs:surface
+        }
+    }
+
+    def "Sphere" (
+        active = true
+        prepend apiSchemas = ["MaterialBindingAPI"]
+        customData = {
+            float3 rotationEulerHint = (6.283184, 6.2831845, 6.283185)
+        }
+        references = @Sphere.usdz@
+    )
+    {
+        reorder nameChildren = ["Materials", "Meshes", "FireSpatialAudio", "SpatialAudio", "FireSpawnSpatialAudio"]
+        rel material:binding = </Root/FireBallMaterial> (
+            bindMaterialAs = "weakerThanDescendants"
+        )
+        quatf xformOp:orient = (1, -3.8941437e-7, -1.5099585e-7, 8.742272e-8)
+        float3 xformOp:scale = (0.01, 0.01, 0.01)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "FireSpatialAudio" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+            customData = {
+                float3 rotationEulerHint = (6.283184, 6.2831845, 6.283185)
+            }
+        )
+        {
+            reorder nameChildren = ["SpatialAudio", "fire_sound"]
+            rel material:binding = </Root/FireBallMaterial> (
+                bindMaterialAs = "weakerThanDescendants"
+            )
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (100, 100, 100)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def RealityKitComponent "SpatialAudio"
+            {
+                float directivityFocus = 0
+                float directLevel = 0
+                float gain = -45
+                uniform token info:id = "RealityKit.SpatialAudio"
+                float reverbLevel = -10
+                float rolloffFactor = -27.661459
+            }
+
+            def RealityKitAudioFile "fire_sound"
+            {
+                uniform token calibrationMode = "relative"
+                uniform asset file = @fire.mp3@
+                uniform token loadingStrategy = "Stream"
+                uniform bool shouldLoop = 1
+                uniform bool shouldRandomizeStartTime = 0
+            }
+        }
+
+        def RealityKitComponent "SpatialAudio"
+        {
+            float directLevel = 0
+            float gain = -5
+            uniform token info:id = "RealityKit.SpatialAudio"
+            float rolloffFactor = 5
+        }
+
+        def Xform "FireSpawnSpatialAudio"
+        {
+            reorder nameChildren = ["spawn_fire", "spawn_fire", "SpatialAudio"]
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (100, 100, 100)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def RealityKitComponent "SpatialAudio"
+            {
+                float gain = -55.002083
+                uniform token info:id = "RealityKit.SpatialAudio"
+                float rolloffFactor = 5
+            }
+
+            def RealityKitAudioFile "spawn_fire"
+            {
+                uniform asset file = @spawn-fire.mp3@
+                uniform token loadingStrategy = "Preload"
+                uniform bool shouldLoop = 0
+            }
+        }
+    }
+
+    def Xform "Fire"
+    {
+        float3 xformOp:translate = (-0.055415526, 0.30179304, -0.01251936)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def RealityKitComponent "VFXEmitter"
+        {
+            token info:id = "RealityKit.VFXEmitter"
+
+            def RealityKitStruct "currentState"
+            {
+                token birthDirection = "Local"
+                token birthLocation = "Volume"
+                int64 burstCount = 100
+                double emissionDuration = 0
+                token emitterShape = "Plane"
+                bool isLocal = 1
+                bool isLocalFields = 0
+                float particleSpeed = 1
+
+                def RealityKitStruct "mainEmitter"
+                {
+                    token billboardMode = "Billboard"
+                    float birthRate = 10
+                    float4 endColorA = (1, 0.008742433, 0, 1)
+                    float particleAngle = 6.2831855
+                    double particleLifeSpan = 1
+                    float particleSize = 2.5
+                    float sizeMultiplierAtEndOfLifespan = 0
+                    float stretchFactor = 0.2
+                    bool useEndColor = 1
+                    bool useEndColorRange = 0
+                }
+
+                def RealityKitStruct "spawnedEmitter"
+                {
+                }
+            }
+        }
+    }
+}
+
