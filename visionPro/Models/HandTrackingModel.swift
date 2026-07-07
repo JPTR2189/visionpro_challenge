@@ -20,9 +20,28 @@ final class HandTrackingModel {
     var leftSphereShouldAppear = false
     private var leftConsecutiveFramesUp = 0
 
-    /// Permite que usuário dispare uma bola de fogo por vez
-    private var rightThrowFired = false
-    private var leftThrowFired = false
+    /// Máquina de estados do gesto de arremesso (uma por mão).
+    /// Garante UM disparo por gesto: depois de disparar, só re-arma
+    /// quando a palma sai claramente da pose por vários frames seguidos,
+    /// e um cooldown absoluto impede rajadas mesmo com tracking ruidoso.
+    private struct ThrowGestureState {
+        var forwardFrames = 0
+        var exitFrames = 0
+        var isArmed = true
+        var lastFireTime: TimeInterval = 0
+    }
+
+    /// Classificação da pose com histerese: os limiares de entrada
+    /// (forward) e de saída (exited) são afastados de propósito —
+    /// ruído na fronteira cai em "ambiguous" e não conta para nenhum lado.
+    private enum ThrowPose {
+        case forward
+        case ambiguous
+        case exited
+    }
+
+    private var rightThrowState = ThrowGestureState()
+    private var leftThrowState = ThrowGestureState()
 
     /// Gesto de arremesso (palma virando pra frente)
     var rightThrowTriggered = false
@@ -33,8 +52,6 @@ final class HandTrackingModel {
     /// Posição da palma no espaço do mundo
     var rightPalmWorldPosition: SIMD3<Float> = .zero
     var leftPalmWorldPosition: SIMD3<Float> = .zero
-    private var rightConsecutiveFramesForward = 0
-    private var leftConsecutiveFramesForward = 0
 
     /// Limite de frames com ruído tolerados antes de esconder a esfera
     private let toleratedBadFrames = 5
@@ -42,6 +59,10 @@ final class HandTrackingModel {
     private let framesToConfirm = 10
     /// Frames para confirmar o arremesso
     private let framesToConfirmThrow = 5
+    /// Frames claramente FORA da pose necessários para re-armar o arremesso
+    private let framesToRearm = 12
+    /// Intervalo mínimo entre dois arremessos da mesma mão (segundos)
+    private let throwCooldown: TimeInterval = 0.7
 
     /// Usada para aceitar só arremessos para frente 
     @ObservationIgnored
@@ -93,27 +114,42 @@ final class HandTrackingModel {
         let upAlignment = dot(normalizedPalm, worldUp)
         let isUp = upAlignment > 0.75
 
-        /// Direção do arremesso da bola de fogo.
+        /// Direção do arremesso: projeção horizontal da normal da palma
         let horizontalComponent = SIMD3<Float>(
             normalizedPalm.x,
             0,
             normalizedPalm.z
         )
-
-        let isForward = abs(upAlignment) < 0.5
-            && length(horizontalComponent) > 0.001
-
-        let throwDirection: SIMD3<Float> = isForward
-            ? normalize(horizontalComponent)
+        let horizontalMagnitude = length(horizontalComponent)
+        let throwDirection: SIMD3<Float> = horizontalMagnitude > 0.001
+            ? horizontalComponent / horizontalMagnitude
             : .zero
 
         let palmWorldPosition = wristPosition
 
         await MainActor.run {
-            /// Só aceita o arremesso se a palma aponta para onde o usuário olha
+            /// Alinhamento da palma com o olhar (1.0 se não houver
+            /// referência do device — o gate não bloqueia nesse caso)
             let deviceForward = deviceForwardProvider?()
-            let isThrowForward = isForward
-                && (deviceForward.map { dot(throwDirection, $0) > 0.4 } ?? true)
+            let gazeAlignment: Float
+            if let deviceForward, throwDirection != .zero {
+                gazeAlignment = dot(throwDirection, deviceForward)
+            } else {
+                gazeAlignment = 1.0
+            }
+
+            /// Histerese: entrada exige pose franca (normal a <33° da
+            /// horizontal E dentro do cone de olhar); a saída só é
+            /// reconhecida bem longe desses limiares. O meio-termo é
+            /// "ambiguous" — ruído de fronteira não dispara nem re-arma.
+            let throwPose: ThrowPose
+            if isUp || abs(upAlignment) > 0.7 || gazeAlignment < 0.2 || throwDirection == .zero {
+                throwPose = .exited
+            } else if abs(upAlignment) < 0.55 && gazeAlignment > 0.35 {
+                throwPose = .forward
+            } else {
+                throwPose = .ambiguous
+            }
 
             switch handAnchor.chirality {
             case .right:
@@ -125,10 +161,9 @@ final class HandTrackingModel {
 
                 /// Gesto 2 (palma para frente arremessa)
                 updateThrowDetection(
-                    isForward: isThrowForward,
+                    pose: throwPose,
                     direction: throwDirection,
-                    consecutiveFrames: &rightConsecutiveFramesForward,
-                    hasFired: &rightThrowFired
+                    state: &rightThrowState
                 ) { direction in
                     print("🧭 [DIREITA] throwDirection detectado")
                     print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
@@ -145,10 +180,9 @@ final class HandTrackingModel {
                 updateDebounced(isUp, consecutiveFrames: &leftConsecutiveFramesUp) { leftSphereShouldAppear = $0 }
 
                 updateThrowDetection(
-                    isForward: isThrowForward,
+                    pose: throwPose,
                     direction: throwDirection,
-                    consecutiveFrames: &leftConsecutiveFramesForward,
-                    hasFired: &leftThrowFired
+                    state: &leftThrowState
                 ) { direction in
                     print("🧭 [ESQUERDA] throwDirection detectado")
                     print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
@@ -194,27 +228,47 @@ final class HandTrackingModel {
         apply(consecutiveFrames > framesToConfirm)
     }
 
-    /// Detecção do arremesso
-    private func updateThrowDetection(isForward: Bool,
+    /// Detecção do arremesso — máquina de estados com 3 defesas contra
+    /// disparos múltiplos e falhas de detecção:
+    /// 1. Confirmação: só dispara com `framesToConfirmThrow` frames
+    ///    francos de pose (ruído momentâneo não dispara).
+    /// 2. Re-arme sustentado: depois de disparar, exige `framesToRearm`
+    ///    frames claramente FORA da pose (ruído não re-arma).
+    /// 3. Cooldown absoluto: piso de tempo entre dois disparos da mesma
+    ///    mão, mesmo que o tracking oscile violentamente.
+    private func updateThrowDetection(pose: ThrowPose,
                                       direction: SIMD3<Float>,
-                                      consecutiveFrames: inout Int,
-                                      hasFired: inout Bool,
+                                      state: inout ThrowGestureState,
                                       onThrow: (SIMD3<Float>) -> Void) {
-        if isForward {
-            /// Limite máximo de frames consecutivos para aceitar o arremesso
-            consecutiveFrames = min(
-                consecutiveFrames + 1,
+        let now = Date().timeIntervalSince1970
+
+        switch pose {
+        case .forward:
+            state.exitFrames = 0
+            state.forwardFrames = min(
+                state.forwardFrames + 1,
                 framesToConfirmThrow + toleratedBadFrames
             )
-            if !hasFired && consecutiveFrames >= framesToConfirmThrow {
-                hasFired = true
+            if state.isArmed,
+               state.forwardFrames >= framesToConfirmThrow,
+               now - state.lastFireTime >= throwCooldown {
+                state.isArmed = false
+                state.lastFireTime = now
                 onThrow(direction)
             }
-        } else {
-            consecutiveFrames = max(consecutiveFrames - 1, 0)
-            if consecutiveFrames == 0 {
-                hasFired = false
+
+        case .exited:
+            state.forwardFrames = 0
+            state.exitFrames += 1
+            if state.exitFrames >= framesToRearm {
+                state.isArmed = true
             }
+
+        case .ambiguous:
+            /// Fronteira do gesto: decai a confirmação devagar e zera a
+            /// contagem de saída — daqui não se dispara nem se re-arma
+            state.forwardFrames = max(state.forwardFrames - 1, 0)
+            state.exitFrames = 0
         }
     }
 }
