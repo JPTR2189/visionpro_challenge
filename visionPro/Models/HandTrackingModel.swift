@@ -137,9 +137,9 @@ final class HandTrackingModel {
 
           
             let throwPose: ThrowPose
-            if isUp || abs(upAlignment) > 0.7 || gazeAlignment < 0.2 || throwDirection == .zero {
+            if isUp || upAlignment > 0.7 || gazeAlignment < 0.1 || horizontalMagnitude < 0.25 {
                 throwPose = .exited
-            } else if abs(upAlignment) < 0.55 && gazeAlignment > 0.35 {
+            } else if upAlignment < 0.55 && horizontalMagnitude > 0.5 && gazeAlignment > 0.25 {
                 throwPose = .forward
             } else {
                 throwPose = .ambiguous
@@ -161,6 +161,7 @@ final class HandTrackingModel {
                 ) { direction in
                     print("🧭 [DIREITA] throwDirection detectado")
                     print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
+                    print("   up=\(upAlignment)  gaze=\(gazeAlignment)")
                     rightThrowDirection = direction
                     rightThrowTriggered = true
                     /// Esconde a bola da mão
@@ -180,6 +181,7 @@ final class HandTrackingModel {
                 ) { direction in
                     print("🧭 [ESQUERDA] throwDirection detectado")
                     print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
+                    print("   up=\(upAlignment)  gaze=\(gazeAlignment)")
                     leftThrowDirection = direction
                     leftThrowTriggered = true
                     /// Esconde a bola da mão: uma nova instância é arremessada
