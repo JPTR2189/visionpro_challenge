@@ -201,6 +201,10 @@ enum PortalExperience {
         makeRandomRuneSequenceBindings(length: sequenceLength).map(\.rockName)
     }
 
+    static func makeRandomRuneSequence(length: Int) -> [String] {
+        makeRandomRuneSequenceBindings(length: length).map(\.rockName)
+    }
+
     static func playRuneSequence(_ rockNames: [String], in root: Entity) async {
         let sequence = rockNames.compactMap(binding(forRockName:))
         await playLightSequence(sequence, in: root)

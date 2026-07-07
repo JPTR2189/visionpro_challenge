@@ -18,6 +18,9 @@ struct PortalExperienceView: View {
     @State private var isAcceptingRuneInput = false
     @State private var isWaitingForClosingTap = false
     @State private var isClosingPortal = false
+    @State private var currentRoundIndex = 0
+
+    private let roundSequenceLengths = [4, 6, 8]
 
     var body: some View {
         RealityView { content, attachments in
@@ -63,18 +66,22 @@ struct PortalExperienceView: View {
         Task { @MainActor in
             await PortalExperience.playOpeningAnimation(in: portal)
             PortalExperience.startFloatingStoneMotion(in: portal)
-            startNewRound(in: portal)
+            startCurrentRound(in: portal)
         }
     }
 
     @MainActor
-    private func startNewRound(in scene: Entity) {
+    private func startCurrentRound(in scene: Entity) {
+        guard currentRoundIndex < roundSequenceLengths.count else { return }
+
         isAcceptingRuneInput = false
         isWaitingForClosingTap = false
         isClosingPortal = false
         PortalExperience.setClosingHitTargetEnabled(false, in: scene)
         selectedIndex = 0
-        currentSequence = PortalExperience.makeRandomRuneSequence()
+        currentSequence = PortalExperience.makeRandomRuneSequence(
+            length: roundSequenceLengths[currentRoundIndex]
+        )
 
         Task { @MainActor in
             PortalExperience.resetLights(in: scene)
@@ -124,7 +131,7 @@ struct PortalExperienceView: View {
                 }
             } else {
                 try? await Task.sleep(nanoseconds: 500_000_000)
-                startNewRound(in: portalScene)
+                startCurrentRound(in: portalScene)
             }
         }
     }
@@ -145,6 +152,14 @@ struct PortalExperienceView: View {
             await PortalExperience.playClosingAnimation(in: portalScene)
             portalScene.removeFromParent()
             self.portalScene = nil
+
+            currentRoundIndex += 1
+            guard currentRoundIndex < roundSequenceLengths.count else {
+                return
+            }
+
+            try? await Task.sleep(nanoseconds: 850_000_000)
+            addPortalExperienceIfNeeded()
         }
     }
 
