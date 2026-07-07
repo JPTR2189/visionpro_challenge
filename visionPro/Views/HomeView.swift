@@ -36,6 +36,7 @@ struct HomeView: View {
 
             PortalPlaceholderView()
         }
+        .glassBackgroundEffect()
     }
 }
 

@@ -15,8 +15,7 @@
     "objectMetadataList" : [
       [
         "1D572CEB-057A-41C3-B575-04C37501A3C0",
-        "Root",
-        "FireBall"
+        "Root"
       ],
       {
         "isExpanded" : true,
@@ -24,7 +23,8 @@
       },
       [
         "1D572CEB-057A-41C3-B575-04C37501A3C0",
-        "Root"
+        "Root",
+        "FireBall"
       ],
       {
         "isExpanded" : true,
@@ -66,11 +66,12 @@
       [
         "D66134B1-3681-4A8E-AFE5-29F257229F3B",
         "Root",
-        "Sphere"
+        "FireBallTutorial",
+        "Fire"
       ],
       {
-        "isExpanded" : true,
-        "isLocked" : false
+        "isExpanded" : false,
+        "isLocked" : true
       },
       [
         "D66134B1-3681-4A8E-AFE5-29F257229F3B",
@@ -83,12 +84,11 @@
       [
         "D66134B1-3681-4A8E-AFE5-29F257229F3B",
         "Root",
-        "FireBallTutorial",
-        "Fire"
+        "Sphere"
       ],
       {
-        "isExpanded" : false,
-        "isLocked" : true
+        "isExpanded" : true,
+        "isLocked" : false
       }
     ]
   }

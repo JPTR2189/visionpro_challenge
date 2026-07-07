@@ -9,8 +9,8 @@ struct ContentView: View {
             HomeView()
         case .tutorial(let step):
             TutorialContainerView(currentStep: step)
-        case .done:
-            MainMenuView()
+        case .roomScanning(let step):
+            RoomScanningContainerView(currentStep: step)
         }
     }
 }

@@ -5,8 +5,8 @@ import ARKit
 struct PortalExperienceView: View {
 
     @Environment(\.openWindow) private var openWindow
+    @Environment(AppModel.self) private var appModel
 
-    @State private var arSession  = ARKitSessionManager()
     @State private var sceneRoot  = Entity()
     @State private var wallMaterial: (any RealityKit.Material)?
     @State private var floorMaterial: (any RealityKit.Material)?
@@ -23,26 +23,20 @@ struct PortalExperienceView: View {
     private let roundSequenceLengths = [4, 6, 8]
 
     var body: some View {
-        RealityView { content, attachments in
+        RealityView { content in
             content.add(sceneRoot)
-
-            if let uiEntity = attachments.entity(for: "MappingUI") {
-                // Ancorado ao content (espaço imersivo) e não ao sceneRoot
-                // para que apareça à frente do usuário no momento de entrada
-                uiEntity.position = [0, 1.25, -1.0]
-                content.add(uiEntity)
-            }
-        } attachments: {
-            Attachment(id: "MappingUI") {
-                mappingOverlay
-            }
         }
         .task { scanningMaterial = TextureMaterialLoader.createScanningMaterial() }
         .task { wallMaterial = await TextureMaterialLoader.loadWallMaterial() }
         .task { floorMaterial = await TextureMaterialLoader.loadFloorMaterial() }
-        .task { await arSession.run() }
+        .task { await appModel.arSession.run() }
         .task { await processRoomUpdates() }
         .task { await processMeshUpdates() }
+        .onChange(of: appModel.shouldRevealEnvironment) { _, shouldReveal in
+            if shouldReveal {
+                revealEnvironment()
+            }
+        }
         .onDisappear {
             openWindow(id: "MainWindow")
         }
@@ -167,8 +161,8 @@ struct PortalExperienceView: View {
 
     @MainActor
     private func processRoomUpdates() async {
-        for await update in arSession.roomAnchorUpdates {
-            arSession.updateCurrentRoom(update.anchor)
+        for await update in appModel.arSession.roomAnchorUpdates {
+            appModel.arSession.updateCurrentRoom(update.anchor)
         }
     }
 
@@ -176,17 +170,16 @@ struct PortalExperienceView: View {
 
     @MainActor
     private func processMeshUpdates() async {
-        for await update in arSession.meshAnchorUpdates {
+        for await update in appModel.arSession.meshAnchorUpdates {
             switch update.event {
             case .added, .updated:
-                arSession.updateMeshAnchor(update.anchor)
-                // Só (re)cria a entidade se ainda não aplicamos as texturas finais,
-                // evitando sobrescrever o material definitivo com o de escaneamento.
-                if arSession.mappingState != .active {
+                appModel.arSession.updateMeshAnchor(update.anchor)
+                
+                if appModel.arSession.mappingState != .active {
                     refreshMeshEntity(for: update.anchor)
                 }
             case .removed:
-                arSession.removeMeshAnchor(id: update.anchor.id)
+                appModel.arSession.removeMeshAnchor(id: update.anchor.id)
                 meshEntities[update.anchor.id]?.removeFromParent()
                 meshEntities.removeValue(forKey: update.anchor.id)
             }
@@ -197,9 +190,9 @@ struct PortalExperienceView: View {
 
     @MainActor
     private func revealEnvironment() {
-        arSession.reveal()
+        appModel.arSession.reveal()
         
-        for anchor in arSession.scannedMeshAnchors.values {
+        for anchor in appModel.arSession.scannedMeshAnchors.values {
             refreshMeshEntity(for: anchor)
         }
 
@@ -210,7 +203,7 @@ struct PortalExperienceView: View {
     private func refreshMeshEntity(for anchor: MeshAnchor) {
         meshEntities[anchor.id]?.removeFromParent()
         
-        let isFinal = (arSession.mappingState == .active)
+        let isFinal = (appModel.arSession.mappingState == .active)
         let wMat = isFinal ? wallMaterial : scanningMaterial
         let fMat = isFinal ? floorMaterial : scanningMaterial
 
@@ -218,125 +211,11 @@ struct PortalExperienceView: View {
             from: anchor,
             wallMaterial: wMat,
             floorMaterial: fMat,
-            floorOpacity: arSession.floorOpacity
+            floorOpacity: appModel.arSession.floorOpacity
         ) else { return }
 
         sceneRoot.addChild(entity)
         meshEntities[anchor.id] = entity
-    }
-
-    // MARK: - UI
-
-    @ViewBuilder
-    private var mappingOverlay: some View {
-        switch arSession.mappingState {
-        case .idle:
-            manualScanningPanel
-        case .scanning:
-            scanningPanel
-        case .ready:
-            readyPanel
-        case .active:
-            EmptyView()
-        }
-    }
-
-    private var scanningPanel: some View {
-        VStack(spacing: 20) {
-            ScanningIndicator()
-
-            VStack(spacing: 6) {
-                Text("Scanning your room...")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-
-                Text("Move your head slowly to scan walls and floor")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            if arSession.authorizationDenied {
-                Text("Permission denied — enable in Settings")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            Button("Finish Scanning") {
-                if arSession.canFinishScanning {
-                    arSession.finishScanning()
-                } else {
-                    arSession.finishScanningManually()
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
-        }
-        .frame(maxWidth: 320)
-        .padding(28)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .padding(.bottom, 40)
-    }
-
-    private var manualScanningPanel: some View {
-        VStack(spacing: 20) {
-            ScanningIndicator()
-
-            VStack(spacing: 6) {
-                Text("Scanning your room...")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-
-                Text("Use manual finish when testing in Simulator.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            Button("Finish Scanning") {
-                arSession.finishScanningManually()
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
-        }
-        .frame(maxWidth: 320)
-        .padding(28)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .padding(.bottom, 40)
-    }
-
-    private var readyPanel: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 42))
-                .foregroundStyle(.green)
-                .symbolEffect(.bounce, options: .nonRepeating)
-
-            VStack(spacing: 6) {
-                Text("Room mapped!")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-
-                Text("Your environment is ready. Apply textures when you're set.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            Button {
-                revealEnvironment()
-            } label: {
-                Label("Apply Textures", systemImage: "sparkles")
-                    .fontWeight(.semibold)
-                    .frame(minWidth: 180)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.indigo)
-        }
-        .frame(maxWidth: 320)
-        .padding(28)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .padding(.bottom, 40)
     }
 }
 

@@ -1,7 +1,7 @@
 import SwiftUI
 import RealityKit
 
-struct TutorialFireballView: View {
+struct TutorialRuneView: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -12,14 +12,14 @@ struct TutorialFireballView: View {
                     .foregroundStyle(.primary)
                 
                 VStack(alignment: .center, spacing: 24) {
-                    Text("Extend your arm until your hand comes into view.\nOpen your palm, turn it upward, and watch the\nfireball come to life.")
+                    Text("Look at each rune and click to activate it,\nfollowing the order shown by the lights.")
                         .font(.largeTitle)
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                     
                     HStack(spacing: 8) {
-                        Image(systemName: "hand.point.up.left")
+                        Image(systemName: "eye")
                             .font(.extraLargeTitle.bold())
                             .foregroundStyle(.primary.opacity(0.5))
 
@@ -27,7 +27,7 @@ struct TutorialFireballView: View {
                             .font(.extraLargeTitle.bold())
                             .foregroundStyle(.primary.opacity(0.5))
 
-                        Image(systemName: "hand.raised")
+                        Image(systemName: "hand.tap")
                             .font(.extraLargeTitle.bold())
                             .foregroundStyle(.primary.opacity(0.5))
                     }
@@ -35,12 +35,12 @@ struct TutorialFireballView: View {
             }
             .padding(.top, 40)
 
-            Image(uiImage: .tutorialFireball)
+            Image(uiImage: .tutorialRunes)
         }
         .frame(width: 1300, height: 700)
         .overlay(alignment: .topTrailing) {
             Button {
-                appModel.onboardingState = .done
+                appModel.onboardingState = .roomScanning(step: .start)
             } label: {
                 Text("Skip")
                 .font(.body)
@@ -54,7 +54,7 @@ struct TutorialFireballView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             Button {
-                appModel.onboardingState = .tutorial(step: .scanningExplanation)
+                appModel.onboardingState = .tutorial(step: .fireballInteraction)
             } label: {
                 Text("Next")
                 .font(.body)
@@ -66,19 +66,11 @@ struct TutorialFireballView: View {
             .buttonStyle(.plain)
             .padding(40)
         }
-        .overlay(alignment: .bottomLeading) {
-            Button {
-                appModel.onboardingState = .tutorial(step: .runeInteraction)
-            } label: {
-                Text("Back")
-                .font(.body)
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(.thinMaterial, in: .capsule)
-            }
-            .buttonStyle(.plain)
-            .padding(40)
-        }
+        .glassBackgroundEffect()
     }
+}
+
+#Preview(windowStyle: .automatic) {
+    TutorialRuneView()
+        .environment(AppModel())
 }
