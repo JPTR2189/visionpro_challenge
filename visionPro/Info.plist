@@ -19,7 +19,5 @@
 			</array>
 		</dict>
 	</dict>
-	<key>NSWorldSensingUsageDescription</key>
-	<string>Used to detect walls and floors in your environment for placing portals and interactive elements.</string>
 </dict>
 </plist>

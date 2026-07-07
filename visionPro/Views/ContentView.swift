@@ -130,6 +130,7 @@ struct ContentView: View {
         appModel.isGameOver = false
         appModel.isRitualComplete = false
         appModel.onboardingState = .hero
+        appModel.shouldOpenMainWindowOnImmersiveDisappear = false
         Task { await dismissImmersiveSpace() }
     }
 }

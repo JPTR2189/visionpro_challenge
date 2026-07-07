@@ -51,4 +51,5 @@ class AppModel {
 
     let arSession = ARKitSessionManager()
     var shouldRevealEnvironment = false
+    var shouldOpenMainWindowOnImmersiveDisappear = true
 }
