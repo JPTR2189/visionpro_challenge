@@ -20,6 +20,7 @@ struct PortalExperienceView: View {
     @State private var isWaitingForClosingTap = false
     @State private var isClosingPortal = false
     @State private var currentRoundIndex = 0
+    @State private var handTrackingStarted = false
     @State private var windAudioController: AudioPlaybackController?
     @State private var handModel = HandTrackingModel()
     @State private var rightFireballEntity: Entity?
@@ -40,6 +41,7 @@ struct PortalExperienceView: View {
     private let fireballAnimationDuration: UInt64 = 350_000_000
     private let fireballProjectileSpeed: Float = 2.5
     private let fireballPortalImpactPadding: UInt64 = 120_000_000
+    private let fireballAudioGain: Audio.Decibel = -8
 
     var body: some View {
         RealityView { content in
@@ -52,11 +54,17 @@ struct PortalExperienceView: View {
         .task { await appModel.arSession.run() }
         .task { await processRoomUpdates() }
         .task { await processMeshUpdates() }
-        .task { await configureFireballTracking() }
-        .task { await handModel.start() }
         .onChange(of: appModel.shouldRevealEnvironment) { _, shouldReveal in
             if shouldReveal {
                 revealEnvironment()
+            }
+        }
+        .onChange(of: isWaitingForClosingTap) { _, waiting in
+            handModel.isEnabled = waiting
+            if waiting && !handTrackingStarted {
+                handTrackingStarted = true
+                Task { await configureFireballTracking() }
+                Task { await handModel.start() }
             }
         }
         .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in
@@ -215,12 +223,14 @@ struct PortalExperienceView: View {
             animateFireball(entity, show: true, translation: translation)
 
             if let audioEntity, let fireballSpawnResource {
-                audioEntity.playAudio(fireballSpawnResource)
+                let spawnController = audioEntity.playAudio(fireballSpawnResource)
+                spawnController.gain = fireballAudioGain
             }
 
             var fireController: AudioPlaybackController?
             if let audioEntity, let fireballLoopResource {
                 fireController = audioEntity.prepareAudio(fireballLoopResource)
+                fireController?.gain = fireballAudioGain
             }
             audioController = fireController
 
@@ -323,7 +333,8 @@ struct PortalExperienceView: View {
 
         if let audioEntity = projectile.findEntity(named: "Sphere"),
            let fireballLoopResource {
-            audioEntity.playAudio(fireballLoopResource)
+            let projectileController = audioEntity.playAudio(fireballLoopResource)
+            projectileController.gain = fireballAudioGain
         }
 
         rightFireballAudioController?.stop()
