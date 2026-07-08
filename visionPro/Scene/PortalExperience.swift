@@ -404,11 +404,11 @@ enum PortalExperience {
     private static func makeOfficialPortal() -> Entity? {
         let portalURL =
             Bundle.main.url(
-                forResource: "Scene - Portal+Runes - Lights Purple and Red",
+                forResource: "Portal+Runes",
                 withExtension: "usdz",
                 subdirectory: "Resources"
             ) ?? Bundle.main.url(
-                forResource: "Scene - Portal+Runes - Lights Purple and Red",
+                forResource: "Portal+Runes",
                 withExtension: "usdz"
             )
 

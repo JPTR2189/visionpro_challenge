@@ -3,6 +3,7 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AppModel.self) private var appModel
+    @State private var appeared = false
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 16) {
@@ -33,10 +34,22 @@ struct HomeView: View {
                 .buttonStyle(.plain)
             }
             .padding(80)
+            .opacity(appeared ? 1 : 0)
 
-            PortalPlaceholderView()
         }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.35)) { appeared = true }
+        }
+        .frame(width: 1200, height: 660, alignment: .bottomLeading)
         .glassBackgroundEffect()
+        .overlay(alignment: .trailing) {
+            PortalPlaceholderView()
+                .frame(width: 760, height: 760)
+                .offset(x: 76)
+//                .offset(y: -28)
+                .allowsHitTesting(false)
+        }
+        .frame(width: 1300, height: 700, alignment: .leading)
     }
 }
 

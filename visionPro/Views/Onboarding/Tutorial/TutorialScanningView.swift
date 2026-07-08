@@ -6,7 +6,7 @@ struct TutorialScanningView: View {
     
     var body: some View {
         VStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .center, spacing: 80) {
+            VStack(alignment: .center, spacing: 64) {
                 Text("Tutorial")
                     .font(.largeTitle.bold())
                     .foregroundStyle(.primary)

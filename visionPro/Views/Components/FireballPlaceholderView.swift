@@ -1,8 +1,8 @@
 import SwiftUI
 import RealityKit
 
-struct PortalPlaceholderView: View {
-    var resourceName: String = "Portal+Runes"
+struct FireBallPlaceholderView: View {
+    var resourceName: String = "Fireball"
     var bundle: Bundle = .main
     private var portalURL: URL? {
            bundle.url(forResource: resourceName, withExtension: "usdz", subdirectory: "Resources")

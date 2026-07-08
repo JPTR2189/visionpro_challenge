@@ -3,6 +3,8 @@ import RealityKit
 
 struct TutorialFireballView: View {
     @Environment(AppModel.self) private var appModel
+    private let fireballWidthRatio: CGFloat = 0.8
+    private let fireballHeightRatio: CGFloat = 0.7
 
     var body: some View {
         VStack(alignment: .center, spacing: 16) {
@@ -32,12 +34,22 @@ struct TutorialFireballView: View {
                             .foregroundStyle(.primary.opacity(0.5))
                     }
                 }
+                Spacer()
             }
             .padding(.top, 40)
 
-            Image(uiImage: .tutorialFireball)
         }
         .frame(width: 1300, height: 700)
+        .overlay(alignment: .bottom) {
+           FireBallPlaceholderView()
+                .containerRelativeFrame([.horizontal, .vertical]) { length, axis in
+                    axis == .horizontal ? length * fireballWidthRatio : length * fireballHeightRatio
+                }
+                .offset(y: 190)
+                .offset(z: -300)
+                .allowsHitTesting(false)
+                
+        }
         .overlay(alignment: .topTrailing) {
             Button {
                 appModel.onboardingState = .roomScanning(step: .start)

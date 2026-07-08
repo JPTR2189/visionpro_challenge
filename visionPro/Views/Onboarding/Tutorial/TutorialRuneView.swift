@@ -1,8 +1,13 @@
 import SwiftUI
 import RealityKit
+import RealityKitContent
 
 struct TutorialRuneView: View {
     @Environment(AppModel.self) private var appModel
+    @State private var appeared = false
+
+    private let portalWidthRatio: CGFloat = 2.3
+    private let portalHeightRatio: CGFloat = 1.8
 
     var body: some View {
         VStack(alignment: .center, spacing: 16) {
@@ -27,17 +32,31 @@ struct TutorialRuneView: View {
                             .font(.extraLargeTitle.bold())
                             .foregroundStyle(.primary.opacity(0.5))
 
-                        Image(systemName: "hand.tap")
+                        Image(systemName: "hand.pinch")
                             .font(.extraLargeTitle.bold())
                             .foregroundStyle(.primary.opacity(0.5))
                     }
                 }
+                Spacer()
             }
-            .padding(.top, 40)
-
-            Image(uiImage: .tutorialRunes)
+            .padding(.top, 48)
+            .opacity(appeared ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.35)) { appeared = true }
         }
         .frame(width: 1300, height: 700)
+        .overlay(alignment: .bottom) {
+            PortalPlaceholderView()
+                .containerRelativeFrame([.horizontal, .vertical]) { length, axis in
+                    axis == .horizontal ? length * portalWidthRatio : length * portalHeightRatio
+                }
+                .offset(y: 930)
+                .offset(z: -150)
+                .rotation3DEffect(.degrees(-15), axis: (x:1, y:0, z:0), anchor: .bottom)
+                .allowsHitTesting(false)
+                
+        }
         .overlay(alignment: .topTrailing) {
             Button {
                 appModel.onboardingState = .roomScanning(step: .start)
