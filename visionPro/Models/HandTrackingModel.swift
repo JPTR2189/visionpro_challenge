@@ -55,12 +55,22 @@ final class HandTrackingModel {
     private let toleratedBadFrames = 5
     /// Frames corretos necessários para exibir a esfera (visual)
     private let framesToConfirm = 10
-    /// Frames para confirmar o arremesso
-    private let framesToConfirmThrow = 5
+    /// Frames para confirmar o arremesso (~33ms a 90Hz)
+    private let framesToConfirmThrow = 3
+    /// Confirmação rápida quando a bola estava visível na mão há pouco:
+    /// no gesto combinado (palma p/ cima → p/ frente) a intenção é
+    /// inequívoca, então o disparo responde no mínimo de frames
+    private let framesToConfirmThrowQuick = 2
+    /// Janela em que a bola "recém-visível" habilita a confirmação rápida
+    private let sphereVisibleGrace: TimeInterval = 1.0
     /// Frames claramente FORA da pose necessários para re-armar o arremesso
-    private let framesToRearm = 12
+    private let framesToRearm = 8
     /// Intervalo mínimo entre dois arremessos da mesma mão (segundos)
-    private let throwCooldown: TimeInterval = 0.7
+    private let throwCooldown: TimeInterval = 0.5
+
+    /// Última vez em que a bola esteve visível em cada mão
+    private var rightSphereLastVisibleAt: TimeInterval = 0
+    private var leftSphereLastVisibleAt: TimeInterval = 0
 
     /// Usada para aceitar só arremessos para frente 
     @ObservationIgnored
@@ -112,38 +122,103 @@ final class HandTrackingModel {
         let upAlignment = dot(normalizedPalm, worldUp)
         let isUp = upAlignment > 0.75
 
-        /// Direção do arremesso: projeção horizontal da normal da palma
+        /// Sinal 1 — normal da palma: projeção horizontal
         let horizontalComponent = SIMD3<Float>(
             normalizedPalm.x,
             0,
             normalizedPalm.z
         )
         let horizontalMagnitude = length(horizontalComponent)
-        let throwDirection: SIMD3<Float> = horizontalMagnitude > 0.001
+        let palmHorizontalDirection: SIMD3<Float> = horizontalMagnitude > 0.001
             ? horizontalComponent / horizontalMagnitude
             : .zero
+
+        /// Sinal 2 — direção dos DEDOS (pulso → nó do dedo médio).
+        /// Cobre a pose de "empurrão"/arremesso real, em que a palma
+        /// termina inclinada para baixo mas os dedos apontam ao alvo —
+        /// pose muito semelhante que o sinal 1 sozinho não reconhece.
+        let middleKnuckle = skeleton.joint(.middleFingerKnuckle)
+        var fingersDirection: SIMD3<Float> = .zero
+        var fingersHorizontalRatio: Float = 0
+        if middleKnuckle.isTracked {
+            let knucklePosition = jointWorldPosition(middleKnuckle, in: handAnchor)
+            let toKnuckle = knucklePosition - wristPosition
+            let fingersHorizontal = SIMD3<Float>(toKnuckle.x, 0, toKnuckle.z)
+            let horizontalLength = length(fingersHorizontal)
+            let totalLength = length(toKnuckle)
+            if totalLength > 0.0001, horizontalLength > 0.0001 {
+                fingersDirection = fingersHorizontal / horizontalLength
+                fingersHorizontalRatio = horizontalLength / totalLength
+            }
+        }
 
         let palmWorldPosition = wristPosition
 
         await MainActor.run {
-            /// Alinhamento da palma com o olhar
+            /// Alinhamento de cada sinal com o olhar
+            /// (sem referência do device, os gates não bloqueiam)
             let deviceForward = deviceForwardProvider?()
-            let gazeAlignment: Float
-            if let deviceForward, throwDirection != .zero {
-                gazeAlignment = dot(throwDirection, deviceForward)
+
+            let palmGaze: Float
+            if let deviceForward, palmHorizontalDirection != .zero {
+                palmGaze = dot(palmHorizontalDirection, deviceForward)
             } else {
-                gazeAlignment = 1.0
+                palmGaze = palmHorizontalDirection != .zero ? 1.0 : -1.0
             }
 
-          
+            let fingersGaze: Float
+            if let deviceForward, fingersDirection != .zero {
+                fingersGaze = dot(fingersDirection, deviceForward)
+            } else {
+                fingersGaze = fingersDirection != .zero ? 1.0 : -1.0
+            }
+
+            /// Pose de arremesso: qualquer um dos dois sinais basta.
+            /// Sinal 1: palma virada para frente (até ~30° acima ou
+            /// qualquer inclinação para baixo com componente horizontal).
+            /// Sinal 2: dedos apontando ao alvo com a palma não-para-cima.
+            let palmSignal = upAlignment < 0.55
+                && horizontalMagnitude > 0.5
+                && palmGaze > 0.15
+            let pushSignal = upAlignment < 0.35
+                && fingersHorizontalRatio > 0.5
+                && fingersGaze > 0.4
+
             let throwPose: ThrowPose
-            if isUp || upAlignment > 0.7 || gazeAlignment < 0.1 || horizontalMagnitude < 0.25 {
+            if isUp || upAlignment > 0.7 {
                 throwPose = .exited
-            } else if upAlignment < 0.55 && horizontalMagnitude > 0.5 && gazeAlignment > 0.25 {
+            } else if palmSignal || pushSignal {
                 throwPose = .forward
+            } else if palmGaze < 0.05 && fingersGaze < 0.05 {
+                /// Nenhum sinal aponta nem vagamente para frente
+                throwPose = .exited
             } else {
                 throwPose = .ambiguous
             }
+
+            /// Direção do arremesso: a direção da MÃO (palma quando
+            /// confiável, senão dedos), estabilizada pela média com o
+            /// olhar — os logs mostraram a normal da palma sozinha
+            /// desviando até ~74° do alvo em empurrões reais.
+            let handDirection: SIMD3<Float>
+            if horizontalMagnitude > 0.5 {
+                handDirection = palmHorizontalDirection
+            } else if fingersDirection != .zero {
+                handDirection = fingersDirection
+            } else {
+                handDirection = palmHorizontalDirection
+            }
+
+            let throwDirection: SIMD3<Float>
+            if let deviceForward, handDirection != .zero {
+                throwDirection = normalize(handDirection + deviceForward)
+            } else if handDirection != .zero {
+                throwDirection = handDirection
+            } else {
+                throwDirection = deviceForward ?? .zero
+            }
+
+            let now = Date().timeIntervalSince1970
 
             switch handAnchor.chirality {
             case .right:
@@ -152,16 +227,24 @@ final class HandTrackingModel {
 
                 /// Gesto 1 (palma para cima exibe a bola)
                 updateDebounced(isUp, consecutiveFrames: &rightConsecutiveFramesUp) { rightSphereShouldAppear = $0 }
+                if rightSphereShouldAppear { rightSphereLastVisibleAt = now }
 
-                /// Gesto 2 (palma para frente arremessa)
+                /// Gesto 2 (palma para frente arremessa).
+                /// Bola recém-visível na mão = gesto combinado em curso:
+                /// confirma no mínimo de frames para máxima resposta.
+                let rightFramesNeeded = now - rightSphereLastVisibleAt < sphereVisibleGrace
+                    ? framesToConfirmThrowQuick
+                    : framesToConfirmThrow
+
                 updateThrowDetection(
                     pose: throwPose,
                     direction: throwDirection,
+                    framesNeeded: rightFramesNeeded,
                     state: &rightThrowState
                 ) { direction in
                     print("🧭 [DIREITA] throwDirection detectado")
                     print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
-                    print("   up=\(upAlignment)  gaze=\(gazeAlignment)")
+                    print("   up=\(upAlignment)  palmGaze=\(palmGaze)  fingersGaze=\(fingersGaze)")
                     rightThrowDirection = direction
                     rightThrowTriggered = true
                     /// Esconde a bola da mão
@@ -173,15 +256,21 @@ final class HandTrackingModel {
                 leftPalmWorldPosition = palmWorldPosition
 
                 updateDebounced(isUp, consecutiveFrames: &leftConsecutiveFramesUp) { leftSphereShouldAppear = $0 }
+                if leftSphereShouldAppear { leftSphereLastVisibleAt = now }
+
+                let leftFramesNeeded = now - leftSphereLastVisibleAt < sphereVisibleGrace
+                    ? framesToConfirmThrowQuick
+                    : framesToConfirmThrow
 
                 updateThrowDetection(
                     pose: throwPose,
                     direction: throwDirection,
+                    framesNeeded: leftFramesNeeded,
                     state: &leftThrowState
                 ) { direction in
                     print("🧭 [ESQUERDA] throwDirection detectado")
                     print("   x=\(direction.x)  y=\(direction.y)  z=\(direction.z)")
-                    print("   up=\(upAlignment)  gaze=\(gazeAlignment)")
+                    print("   up=\(upAlignment)  palmGaze=\(palmGaze)  fingersGaze=\(fingersGaze)")
                     leftThrowDirection = direction
                     leftThrowTriggered = true
                     /// Esconde a bola da mão: uma nova instância é arremessada
@@ -228,6 +317,7 @@ final class HandTrackingModel {
    
     private func updateThrowDetection(pose: ThrowPose,
                                       direction: SIMD3<Float>,
+                                      framesNeeded: Int,
                                       state: inout ThrowGestureState,
                                       onThrow: (SIMD3<Float>) -> Void) {
         let now = Date().timeIntervalSince1970
@@ -240,7 +330,7 @@ final class HandTrackingModel {
                 framesToConfirmThrow + toleratedBadFrames
             )
             if state.isArmed,
-               state.forwardFrames >= framesToConfirmThrow,
+               state.forwardFrames >= framesNeeded,
                now - state.lastFireTime >= throwCooldown {
                 state.isArmed = false
                 state.lastFireTime = now

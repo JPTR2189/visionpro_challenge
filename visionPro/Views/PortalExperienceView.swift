@@ -284,26 +284,37 @@ struct PortalExperienceView: View {
         projectile.components.remove(RotationComponent.self)
         projectile.components.set(ProjectileComponent(direction: launchDirection))
 
-        /// Colisão: esfera trigger do tamanho visual da bola (o shape é
-        /// definido no espaço local e escala junto com a entidade)
-        let bounds = projectile.visualBounds(relativeTo: projectile)
+        /// Raio de colisão medido pela esfera núcleo (os bounds do
+        /// conjunto incluem o emissor de partículas, que inflaria o raio)
+        let collisionReference = projectile.findEntity(named: "Sphere") ?? projectile
+        let bounds = collisionReference.visualBounds(relativeTo: projectile)
         let localRadius = max(bounds.extents.x, bounds.extents.y, bounds.extents.z) * 0.5
-        projectile.components.set(
-            CollisionComponent(
-                shapes: [
-                    .generateSphere(radius: max(localRadius, 0.05))
-                        .offsetBy(translation: bounds.center)
-                ],
-                mode: .trigger
-            )
-        )
 
-        /// Corpo cinemático: sem ele o trigger é tratado como estático e
-        /// pares estático-estático nunca geram CollisionEvents. Kinematic
-        /// ignora gravidade — quem move é o ProjectileSystem.
-        projectile.components.set(
-            PhysicsBodyComponent(mode: .kinematic)
-        )
+        /// Colisão armada com atraso (~37cm de voo livre): a malha do
+        /// ARKit cobre superfícies coladas à mão (mesa, corpo, sofá) e
+        /// sem o atraso o projétil explodiria no spawn, invisível.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard projectile.parent != nil,
+                  projectile.components.has(ProjectileComponent.self) else { return }
+
+            projectile.components.set(
+                CollisionComponent(
+                    shapes: [
+                        .generateSphere(radius: max(localRadius, 0.05))
+                            .offsetBy(translation: bounds.center)
+                    ],
+                    mode: .trigger
+                )
+            )
+
+            /// Corpo cinemático: sem ele o trigger é tratado como estático
+            /// e pares estático-estático nunca geram CollisionEvents.
+            /// Kinematic ignora gravidade — quem move é o ProjectileSystem.
+            projectile.components.set(
+                PhysicsBodyComponent(mode: .kinematic)
+            )
+        }
 
         projectile.position = spawnPosition
         projectile.scale = [targetScale, targetScale, targetScale]
