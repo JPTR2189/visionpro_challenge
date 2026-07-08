@@ -62,6 +62,18 @@ final class HandTrackingModel {
     /// Intervalo mínimo entre dois arremessos da mesma mão (segundos)
     private let throwCooldown: TimeInterval = 0.7
 
+    /// Janela de sequência (padrão Start→Motion→End dos sistemas de
+    /// reconhecimento de sequências de gestos): o gesto 1 confirmado
+    /// (bola visível na mão) "prepara" o arremesso. Dentro desta janela,
+    /// a confirmação do gesto 2 fica mais rápida e tolerante — a intenção
+    /// já foi validada pelo gesto inicial, então o risco de falso
+    /// positivo é mínimo. FORA da janela, a detecção standalone
+    /// permanece exatamente a comprovada em teste.
+    private var rightPrimedUntil: TimeInterval = 0
+    private var leftPrimedUntil: TimeInterval = 0
+    private let primedWindowDuration: TimeInterval = 1.5
+    private let framesToConfirmThrowPrimed = 2
+
     /// Usada para aceitar só arremessos para frente 
     @ObservationIgnored
     var deviceForwardProvider: (@MainActor () -> SIMD3<Float>?)?
@@ -135,15 +147,7 @@ final class HandTrackingModel {
                 gazeAlignment = 1.0
             }
 
-          
-            let throwPose: ThrowPose
-            if isUp || upAlignment > 0.7 || gazeAlignment < 0.1 || horizontalMagnitude < 0.25 {
-                throwPose = .exited
-            } else if upAlignment < 0.55 && horizontalMagnitude > 0.5 && gazeAlignment > 0.25 {
-                throwPose = .forward
-            } else {
-                throwPose = .ambiguous
-            }
+            let now = Date().timeIntervalSince1970
 
             switch handAnchor.chirality {
             case .right:
@@ -153,10 +157,23 @@ final class HandTrackingModel {
                 /// Gesto 1 (palma para cima exibe a bola)
                 updateDebounced(isUp, consecutiveFrames: &rightConsecutiveFramesUp) { rightSphereShouldAppear = $0 }
 
+                /// Bola na mão renova a janela de sequência
+                if rightSphereShouldAppear {
+                    rightPrimedUntil = now + primedWindowDuration
+                }
+                let rightIsPrimed = now < rightPrimedUntil
+
                 /// Gesto 2 (palma para frente arremessa)
                 updateThrowDetection(
-                    pose: throwPose,
+                    pose: classifyThrowPose(
+                        isUp: isUp,
+                        upAlignment: upAlignment,
+                        horizontalMagnitude: horizontalMagnitude,
+                        gazeAlignment: gazeAlignment,
+                        isPrimed: rightIsPrimed
+                    ),
                     direction: throwDirection,
+                    framesNeeded: rightIsPrimed ? framesToConfirmThrowPrimed : framesToConfirmThrow,
                     state: &rightThrowState
                 ) { direction in
                     print("🧭 [DIREITA] throwDirection detectado")
@@ -164,9 +181,10 @@ final class HandTrackingModel {
                     print("   up=\(upAlignment)  gaze=\(gazeAlignment)")
                     rightThrowDirection = direction
                     rightThrowTriggered = true
-                    /// Esconde a bola da mão
+                    /// Esconde a bola da mão e consome a janela de sequência
                     rightSphereShouldAppear = false
                     rightConsecutiveFramesUp = 0
+                    rightPrimedUntil = 0
                 }
             case .left:
                 leftPalmIsFacingUp = isUp
@@ -174,9 +192,22 @@ final class HandTrackingModel {
 
                 updateDebounced(isUp, consecutiveFrames: &leftConsecutiveFramesUp) { leftSphereShouldAppear = $0 }
 
+                /// Bola na mão renova a janela de sequência
+                if leftSphereShouldAppear {
+                    leftPrimedUntil = now + primedWindowDuration
+                }
+                let leftIsPrimed = now < leftPrimedUntil
+
                 updateThrowDetection(
-                    pose: throwPose,
+                    pose: classifyThrowPose(
+                        isUp: isUp,
+                        upAlignment: upAlignment,
+                        horizontalMagnitude: horizontalMagnitude,
+                        gazeAlignment: gazeAlignment,
+                        isPrimed: leftIsPrimed
+                    ),
                     direction: throwDirection,
+                    framesNeeded: leftIsPrimed ? framesToConfirmThrowPrimed : framesToConfirmThrow,
                     state: &leftThrowState
                 ) { direction in
                     print("🧭 [ESQUERDA] throwDirection detectado")
@@ -184,9 +215,10 @@ final class HandTrackingModel {
                     print("   up=\(upAlignment)  gaze=\(gazeAlignment)")
                     leftThrowDirection = direction
                     leftThrowTriggered = true
-                    /// Esconde a bola da mão: uma nova instância é arremessada
+                    /// Esconde a bola da mão e consome a janela de sequência
                     leftSphereShouldAppear = false
                     leftConsecutiveFramesUp = 0
+                    leftPrimedUntil = 0
                 }
             @unknown default:
                 break
@@ -224,10 +256,38 @@ final class HandTrackingModel {
         apply(consecutiveFrames > framesToConfirm)
     }
 
+    /// Classificação da pose de arremesso.
+    /// Fora da janela de sequência (standalone), os limiares são
+    /// exatamente os comprovados em teste no device. Dentro da janela
+    /// (bola estava na mão há <1,5s), a entrada fica mais tolerante:
+    /// a virada natural "passa do ponto" para baixo e desalinha do
+    /// olhar durante o movimento — com a intenção já validada pelo
+    /// gesto 1, esses desvios não devem impedir o disparo.
+    private func classifyThrowPose(isUp: Bool,
+                                   upAlignment: Float,
+                                   horizontalMagnitude: Float,
+                                   gazeAlignment: Float,
+                                   isPrimed: Bool) -> ThrowPose {
+        let maxUp: Float = isPrimed ? 0.65 : 0.55
+        let minHorizontal: Float = isPrimed ? 0.35 : 0.5
+        let minGaze: Float = isPrimed ? 0.1 : 0.25
+        let exitGaze: Float = isPrimed ? -0.1 : 0.1
+        let exitHorizontal: Float = isPrimed ? 0.2 : 0.25
+
+        if isUp || upAlignment > 0.7 || gazeAlignment < exitGaze || horizontalMagnitude < exitHorizontal {
+            return .exited
+        }
+        if upAlignment < maxUp && horizontalMagnitude > minHorizontal && gazeAlignment > minGaze {
+            return .forward
+        }
+        return .ambiguous
+    }
+
     /// Detecção do arremesso
-   
+
     private func updateThrowDetection(pose: ThrowPose,
                                       direction: SIMD3<Float>,
+                                      framesNeeded: Int,
                                       state: inout ThrowGestureState,
                                       onThrow: (SIMD3<Float>) -> Void) {
         let now = Date().timeIntervalSince1970
@@ -240,7 +300,7 @@ final class HandTrackingModel {
                 framesToConfirmThrow + toleratedBadFrames
             )
             if state.isArmed,
-               state.forwardFrames >= framesToConfirmThrow,
+               state.forwardFrames >= framesNeeded,
                now - state.lastFireTime >= throwCooldown {
                 state.isArmed = false
                 state.lastFireTime = now
