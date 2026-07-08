@@ -74,9 +74,19 @@ final class HandTrackingModel {
     private let primedWindowDuration: TimeInterval = 1.5
     private let framesToConfirmThrowPrimed = 2
 
-    /// Usada para aceitar só arremessos para frente 
+    /// Usada para aceitar só arremessos para frente
     @ObservationIgnored
     var deviceForwardProvider: (@MainActor () -> SIMD3<Float>?)?
+
+    /// Direção de mira suavizada (uma por mão). A normal da palma (usada
+    /// para CLASSIFICAR o gesto) fica mal-condicionada quando a palma
+    /// aponta quase reto para baixo — pequenas variações de rotação do
+    /// pulso produzem grandes oscilações na projeção horizontal. Por
+    /// isso a MIRA usa o vetor pulso→ponta do dedo médio (referência
+    /// menos sensível ao "roll" do antebraço) com suavização temporal.
+    private var rightAimDirection = SIMD3<Float>(0, 0, -1)
+    private var leftAimDirection = SIMD3<Float>(0, 0, -1)
+    private let aimSmoothingFactor: Float = 0.35
 
     func start() async {
         guard HandTrackingProvider.isSupported else {
@@ -111,6 +121,15 @@ final class HandTrackingModel {
         let indexPosition = jointWorldPosition(indexMetacarpal, in: handAnchor)
         let littlePosition = jointWorldPosition(littleMetacarpal, in: handAnchor)
 
+        /// Ponto de mira: ponta do dedo médio. Vetor pulso→ponta é um
+        /// braço de alavanca mais longo e estável do que a normal da
+        /// palma para indicar "para onde a mão aponta" (não tracked
+        /// não é erro fatal — cai no fallback da normal da palma).
+        let middleFingerTip = skeleton.joint(.middleFingerTip)
+        let pointingWorldPosition: SIMD3<Float>? = middleFingerTip.isTracked
+            ? jointWorldPosition(middleFingerTip, in: handAnchor)
+            : nil
+
         /// Cálculo posição normal da palma (direção que a palma aponta).
         let toIndex = indexPosition - wristPosition
         let toLittle = littlePosition - wristPosition
@@ -134,6 +153,23 @@ final class HandTrackingModel {
         let throwDirection: SIMD3<Float> = horizontalMagnitude > 0.001
             ? horizontalComponent / horizontalMagnitude
             : .zero
+
+        /// Direção de mira: pulso→dedo médio projetada no horizontal.
+        /// Abaixo de ~2cm de projeção horizontal a mão aponta quase reto
+        /// para cima/baixo — nesse caso mantém a última mira válida em
+        /// vez de normalizar um vetor quase nulo (ruído amplificado).
+        var pointingDirection: SIMD3<Float> = .zero
+        if let pointingWorldPosition {
+            let toTip = pointingWorldPosition - wristPosition
+            let horizontalTip = SIMD3<Float>(toTip.x, 0, toTip.z)
+            let tipMagnitude = length(horizontalTip)
+            if tipMagnitude > 0.02 {
+                pointingDirection = horizontalTip / tipMagnitude
+            }
+        }
+        /// Fallback: sem ponta do dedo rastreada ou mão quase vertical,
+        /// usa a normal da palma (menos estável, mas melhor que nada)
+        let aimDirection = pointingDirection != .zero ? pointingDirection : throwDirection
 
         let palmWorldPosition = wristPosition
 
