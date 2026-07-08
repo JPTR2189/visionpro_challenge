@@ -39,6 +39,12 @@ struct PortalExperienceView: View {
     @State private var sharedAudioResource: AudioFileResource?
     @State private var spawnAudioResource: AudioFileResource?
 
+    /// Malha invisível de colisão do ambiente físico (ARKit)
+    @State private var environmentTracker = EnvironmentMeshTracker()
+
+    /// Observa colisões e executa a explosão da bola de fogo
+    @State private var collisionHandler = CollisionHandler()
+
     private let targetScale: Float = 0.05
     private let palmOffset: SIMD3<Float> = [0, 0.1, 0]
     private let animationDuration: UInt64 = 350_000_000
@@ -46,6 +52,9 @@ struct PortalExperienceView: View {
     var body: some View {
         RealityView { content in
             content.add(sceneRoot)
+
+            /// Observador das colisões (bola de fogo × ambiente físico)
+            collisionHandler.subscribe(to: content)
 
             /// Áudio compartilhado para as bolas de fogos
             /// (o USDA renomeou "fireSound" → "fire_sound" na branch de áudio)
@@ -138,6 +147,7 @@ struct PortalExperienceView: View {
             }
         }
         .task { await handModel.start() }
+        .task { await environmentTracker.start(attachingTo: sceneRoot) }
         // ── Gestos: bola aparece/some na mão ──
         .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in
             showFireball(rightSphereEntity, audioEntity: rightAudioEntity,
@@ -273,6 +283,27 @@ struct PortalExperienceView: View {
 
         projectile.components.remove(RotationComponent.self)
         projectile.components.set(ProjectileComponent(direction: launchDirection))
+
+        /// Colisão: esfera trigger do tamanho visual da bola (o shape é
+        /// definido no espaço local e escala junto com a entidade)
+        let bounds = projectile.visualBounds(relativeTo: projectile)
+        let localRadius = max(bounds.extents.x, bounds.extents.y, bounds.extents.z) * 0.5
+        projectile.components.set(
+            CollisionComponent(
+                shapes: [
+                    .generateSphere(radius: max(localRadius, 0.05))
+                        .offsetBy(translation: bounds.center)
+                ],
+                mode: .trigger
+            )
+        )
+
+        /// Corpo cinemático: sem ele o trigger é tratado como estático e
+        /// pares estático-estático nunca geram CollisionEvents. Kinematic
+        /// ignora gravidade — quem move é o ProjectileSystem.
+        projectile.components.set(
+            PhysicsBodyComponent(mode: .kinematic)
+        )
 
         projectile.position = spawnPosition
         projectile.scale = [targetScale, targetScale, targetScale]

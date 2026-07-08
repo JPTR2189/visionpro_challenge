@@ -8,6 +8,7 @@ struct visionProApp: App {
     init() {
         ProjectileComponent.registerComponent()
         RotationComponent.registerComponent()
+        EnvironmentMeshComponent.registerComponent()
 
         ProjectileSystem.registerSystem()
         RotationSystem.registerSystem()
