@@ -20,6 +20,7 @@ struct PortalExperienceView: View {
     @State private var isWaitingForClosingTap = false
     @State private var isClosingPortal = false
     @State private var currentRoundIndex = 0
+    @State private var handTrackingStarted = false
     @State private var windAudioController: AudioPlaybackController?
     @State private var handModel = HandTrackingModel()
     @State private var rightFireballEntity: Entity?
@@ -52,11 +53,17 @@ struct PortalExperienceView: View {
         .task { await appModel.arSession.run() }
         .task { await processRoomUpdates() }
         .task { await processMeshUpdates() }
-        .task { await configureFireballTracking() }
-        .task { await handModel.start() }
         .onChange(of: appModel.shouldRevealEnvironment) { _, shouldReveal in
             if shouldReveal {
                 revealEnvironment()
+            }
+        }
+        .onChange(of: isWaitingForClosingTap) { _, waiting in
+            handModel.isEnabled = waiting
+            if waiting && !handTrackingStarted {
+                handTrackingStarted = true
+                Task { await configureFireballTracking() }
+                Task { await handModel.start() }
             }
         }
         .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in

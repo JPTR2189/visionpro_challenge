@@ -10,6 +10,9 @@ final class HandTrackingModel {
     private let session = ARKitSession()
     private let handTracking = HandTrackingProvider()
 
+    /// Quando false, todo processamento de gesto é ignorado
+    var isEnabled = false
+
     /// Estado visual da mão DIREITA
     var rightPalmIsFacingUp = false
     var rightSphereShouldAppear = false
@@ -85,6 +88,7 @@ final class HandTrackingModel {
     }
 
     func processUpdate(_ handAnchor: HandAnchor) async {
+        guard isEnabled else { return }
 
         guard let skeleton = handAnchor.handSkeleton else { return }
 
