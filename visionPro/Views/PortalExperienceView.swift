@@ -41,6 +41,7 @@ struct PortalExperienceView: View {
     private let fireballAnimationDuration: UInt64 = 350_000_000
     private let fireballProjectileSpeed: Float = 2.5
     private let fireballPortalImpactPadding: UInt64 = 120_000_000
+    private let fireballAudioGain: Audio.Decibel = -8
 
     var body: some View {
         RealityView { content in
@@ -222,12 +223,14 @@ struct PortalExperienceView: View {
             animateFireball(entity, show: true, translation: translation)
 
             if let audioEntity, let fireballSpawnResource {
-                audioEntity.playAudio(fireballSpawnResource)
+                let spawnController = audioEntity.playAudio(fireballSpawnResource)
+                spawnController.gain = fireballAudioGain
             }
 
             var fireController: AudioPlaybackController?
             if let audioEntity, let fireballLoopResource {
                 fireController = audioEntity.prepareAudio(fireballLoopResource)
+                fireController?.gain = fireballAudioGain
             }
             audioController = fireController
 
@@ -330,7 +333,8 @@ struct PortalExperienceView: View {
 
         if let audioEntity = projectile.findEntity(named: "Sphere"),
            let fireballLoopResource {
-            audioEntity.playAudio(fireballLoopResource)
+            let projectileController = audioEntity.playAudio(fireballLoopResource)
+            projectileController.gain = fireballAudioGain
         }
 
         rightFireballAudioController?.stop()
