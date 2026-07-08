@@ -393,18 +393,17 @@ struct PortalExperienceView: View {
         portalScene = portal
 
         Task { @MainActor in
-            let windController = await playSpatialAudio(named: "Wind.flac", on: portal, loop: true)
-            let openController = await playSpatialAudio(named: "Open Portal.wav", on: portal)
-
-            // addChild happens in the same synchronous block as the collapse setup
-            // inside playOpeningAnimation — no frame is rendered in between
-            sceneRoot.addChild(portal)
-
-            if let windController {
+            if let windController = await playSpatialAudio(named: "Wind.flac", on: portal, loop: true) {
                 windAudioController = windController
+                windAudioController?.gain = 8.0
                 windAudioController?.play()
             }
-            openController?.play()
+            if let openController = await playSpatialAudio(named: "Open Portal.wav", on: portal) {
+                openController.gain = 10.0
+                openController.play()
+            }
+
+            sceneRoot.addChild(portal)
 
             await PortalExperience.playOpeningAnimation(in: portal)
             PortalExperience.startFloatingStoneMotion(in: portal)
@@ -455,6 +454,7 @@ struct PortalExperienceView: View {
 
         Task { @MainActor in
             if let runeController = await playSpatialAudio(named: soundName, on: entity) {
+                runeController.gain = isCorrect ? 10.0 : -12.0
                 runeController.play()
             }
 

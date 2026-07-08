@@ -30,8 +30,8 @@ class AudioManager {
         
         do {
             soundTrackPlayer = try AVAudioPlayer(contentsOf: url)
-            soundTrackPlayer?.numberOfLoops = -1
-            soundTrackPlayer?.volume = 0.5
+            soundTrackPlayer?.numberOfLoops = -1 // Loop indefinitely
+            soundTrackPlayer?.volume = 1.0 // Aumentado para 1.0 (máximo)
             soundTrackPlayer?.play()
         } catch {
             print("Failed to play Sound Track: \(error)")
