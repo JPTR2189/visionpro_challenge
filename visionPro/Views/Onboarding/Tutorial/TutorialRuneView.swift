@@ -4,6 +4,7 @@ import RealityKitContent
 
 struct TutorialRuneView: View {
     @Environment(AppModel.self) private var appModel
+    @State private var appeared = false
 
     private let portalWidthRatio: CGFloat = 2.3
     private let portalHeightRatio: CGFloat = 1.8
@@ -39,6 +40,10 @@ struct TutorialRuneView: View {
                 Spacer()
             }
             .padding(.top, 48)
+            .opacity(appeared ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.35)) { appeared = true }
         }
         .frame(width: 1300, height: 700)
         .overlay(alignment: .bottom) {
