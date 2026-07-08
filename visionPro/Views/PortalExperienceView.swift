@@ -358,7 +358,52 @@ struct PortalExperienceView: View {
                     to: targetPosition
                 )
             )
+            /// Impacto: a bola some junto com a animação de fechar do portal
+            vanishFireball(projectile)
             closePortalAfterFinalTap()
+        }
+    }
+
+    /// Bola de fogo some no impacto com o portal
+    @MainActor
+    private func vanishFireball(_ projectile: Entity) {
+        guard projectile.parent != nil else { return }
+
+        /// ProjectileSystem passa a ignorar a entidade (para de voar)
+        projectile.components.remove(ProjectileComponent.self)
+
+        let currentScale = projectile.scale.x
+        let burstScale = currentScale * 3.0
+
+        projectile.move(
+            to: Transform(
+                scale: SIMD3<Float>(repeating: burstScale),
+                rotation: projectile.orientation,
+                translation: projectile.position
+            ),
+            relativeTo: projectile.parent,
+            duration: 0.15,
+            timingFunction: .easeOut
+        )
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+
+            projectile.move(
+                to: Transform(
+                    scale: SIMD3<Float>(repeating: fireballHiddenScale),
+                    rotation: projectile.orientation,
+                    translation: projectile.position
+                ),
+                relativeTo: projectile.parent,
+                duration: 0.25,
+                timingFunction: .easeIn
+            )
+
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            /// Remove só o projétil: o pai é o sceneRoot —
+            /// remover o pai apagaria a cena inteira.
+            projectile.removeFromParent()
         }
     }
 
