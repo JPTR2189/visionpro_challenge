@@ -72,8 +72,11 @@ enum PortalExperience {
         }
         let center = portalCenterRunePosition(in: portal)
 
-        var collapsedPortalTransform = originalPortalTransform
-        collapsedPortalTransform.scale = originalPortalTransform.scale * openingInitialScale
+        let collapsedPortalTransform = scaledTransform(
+            for: portal,
+            keepingLocalPoint: center,
+            scaleFactor: openingInitialScale
+        )
         portal.transform = collapsedPortalTransform
 
         for (index, item) in originalStoneTransforms.enumerated() {
@@ -136,8 +139,11 @@ enum PortalExperience {
             portal.parent?.addChild(smoke)
 
             for animation in smoke.availableAnimations {
-                smoke.playAnimation(animation.repeat())
+                let controller = smoke.playAnimation(animation.repeat())
+                controller.speed = closingSmokeAnimationSpeed
             }
+
+            animateFastSmokeSpin(smoke)
 
             smoke.move(
                 to: Transform(
@@ -183,8 +189,10 @@ enum PortalExperience {
             timingFunction: .easeInOut
         )
 
-        try? await Task.sleep(nanoseconds: closingSettleDuration)
+        try? await Task.sleep(nanoseconds: UInt64(closingPortalDuration * 1_000_000_000))
         portal.isEnabled = false
+
+        try? await Task.sleep(nanoseconds: closingSettleDuration)
     }
 
     static func startGeniusLightSequence(in root: Entity) {
@@ -469,31 +477,61 @@ enum PortalExperience {
     }
 
     private static func makePortalSmoke(targetSize: Float) -> Entity? {
-        let smokeURL =
-            Bundle.main.url(
-                forResource: "Evanescent_Smoke",
-                withExtension: "usdz",
-                subdirectory: "Resources"
-            ) ?? Bundle.main.url(
-                forResource: "Evanescent_Smoke",
-                withExtension: "usdz"
-            )
+        let smokeEntity = Entity()
+        smokeEntity.name = "PortalClosingSmoke"
 
-        guard let smokeURL,
-              let smoke = try? Entity.load(contentsOf: smokeURL) else {
-            return nil
+        var emitter = ParticleEmitterComponent()
+        // .local: particles live in entity space so the fast spin creates a vortex
+        emitter.fieldSimulationSpace = .local
+        emitter.emitterShape = .sphere
+        emitter.emitterShapeSize = SIMD3<Float>(repeating: targetSize * 0.35)
+        emitter.speed = 0.10
+        emitter.speedVariation = 0.05
+
+        emitter.mainEmitter.birthRate = 65
+        emitter.mainEmitter.lifeSpan = 1.5
+        emitter.mainEmitter.lifeSpanVariation = 0.5
+        emitter.mainEmitter.size = targetSize * 0.075
+        emitter.mainEmitter.sizeVariation = targetSize * 0.025
+        emitter.mainEmitter.sizeMultiplierAtEndOfLifespan = 1.8
+        emitter.mainEmitter.color = .constant(.single(
+            UIColor(white: 0.05, alpha: 0.28)
+        ))
+        emitter.mainEmitter.blendMode = .alpha
+        emitter.mainEmitter.dampingFactor = 0.90
+        emitter.mainEmitter.spreadingAngle = .pi
+
+        smokeEntity.components.set(emitter)
+        return smokeEntity
+    }
+
+    private static func animateFastSmokeSpin(_ smoke: Entity) {
+        let baseTransform = smoke.transform
+        let spinTransform = Transform(
+            scale: baseTransform.scale,
+            rotation: simd_quatf(angle: .pi * 2, axis: [0, 1, 0]) * baseTransform.rotation,
+            translation: baseTransform.translation
+        )
+
+        smoke.move(
+            to: spinTransform,
+            relativeTo: smoke.parent,
+            duration: closingSmokeSpinDuration,
+            timingFunction: .linear
+        )
+
+        Task { @MainActor in
+            while smoke.parent != nil, smoke.isEnabled {
+                try? await Task.sleep(nanoseconds: UInt64(closingSmokeSpinDuration * 1_000_000_000))
+                smoke.transform = baseTransform
+                smoke.move(
+                    to: spinTransform,
+                    relativeTo: smoke.parent,
+                    duration: closingSmokeSpinDuration,
+                    timingFunction: .linear
+                )
+            }
         }
-
-        smoke.name = "PortalClosingSmoke"
-        let bounds = smoke.visualBounds(relativeTo: smoke)
-        let largestExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
-        if largestExtent > 0 {
-            let normalizedScale = targetSize / largestExtent
-            smoke.scale = [normalizedScale, normalizedScale, normalizedScale]
-            smoke.position -= bounds.center * normalizedScale
-        }
-
-        return smoke
     }
 
     private static func playLightSequence(_ sequence: [RuneLightBinding], in root: Entity) async {
@@ -664,25 +702,27 @@ enum PortalExperience {
     private static let portalInteriorTargetSize: Float = 3.22
     private static let portalInteriorOffset = SIMD3<Float>(0, 0, -0.10)
     private static let openingInitialScale: Float = 0.02
-    private static let openingPortalDuration: TimeInterval = 2.7
-    private static let openingRuneMoveDuration: TimeInterval = 0.82
+    private static let openingPortalDuration: TimeInterval = 0.56
+    private static let openingRuneMoveDuration: TimeInterval = 0.16
     private static let openingRuneCenterScale: Float = 0.18
     private static let openingRuneCenterRadius: Float = 0.16
     private static let openingRuneCenterDepthOffset: Float = 0.10
-    private static let openingRuneRevealDelay: UInt64 = 260_000_000
-    private static let openingRuneStaggerDuration: UInt64 = 340_000_000
-    private static let openingFinalSettleDuration: UInt64 = 960_000_000
+    private static let openingRuneRevealDelay: UInt64 = 40_000_000
+    private static let openingRuneStaggerDuration: UInt64 = 40_000_000
+    private static let openingFinalSettleDuration: UInt64 = 180_000_000
     private static let closingSmokeTargetSize: Float = 2.15
     private static let closingSmokeInitialScale: Float = 0.35
     private static let closingSmokeFinalScale: Float = 1.35
     private static let closingSmokeOffset = SIMD3<Float>(0, 0, 0.46)
-    private static let closingSmokeDuration: TimeInterval = 1.55
-    private static let closingSmokeLeadDuration: UInt64 = 180_000_000
-    private static let closingRuneMoveDuration: TimeInterval = 0.58
+    private static let closingSmokeAnimationSpeed: Float = 42.0
+    private static let closingSmokeSpinDuration: TimeInterval = 0.16
+    private static let closingSmokeDuration: TimeInterval = 1.05
+    private static let closingSmokeLeadDuration: UInt64 = 120_000_000
+    private static let closingRuneMoveDuration: TimeInterval = 0.42
     private static let closingRuneCenterScale: Float = 0.16
-    private static let closingPortalDuration: TimeInterval = 0.86
-    private static let closingPortalFinalScale: Float = 0.02
-    private static let closingSettleDuration: UInt64 = 1_120_000_000
+    private static let closingPortalDuration: TimeInterval = 0.58
+    private static let closingPortalFinalScale: Float = 0.001
+    private static let closingSettleDuration: UInt64 = 360_000_000
     private static let closingHitTargetRadius: Float = 2.05
     private static let closingHitTargetOffset = SIMD3<Float>(0, 0, 0.30)
     private static let closingHitTargetName = "PortalClosingHitTarget"

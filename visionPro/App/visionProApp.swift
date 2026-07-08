@@ -8,12 +8,20 @@ struct visionProApp: App {
 
     init() {
         PortalRuneVisualSystem.registerRealityKitContent()
+        ProjectileComponent.registerComponent()
+        RotationComponent.registerComponent()
+        ProjectileSystem.registerSystem()
+        RotationSystem.registerSystem()
     }
 
     var body: some SwiftUI.Scene {
         WindowGroup(id: "MainWindow") {
             ContentView()
                 .environment(appModel)
+                .animation(.easeInOut(duration: 0.35), value: appModel.onboardingState)
+                .task {
+                    AudioManager.shared.playSoundTrack()
+                }
         }
         .defaultSize(width: 1300, height: 700)
         .windowStyle(.plain)
