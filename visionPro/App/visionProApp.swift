@@ -8,6 +8,10 @@ struct visionProApp: App {
 
     init() {
         PortalRuneVisualSystem.registerRealityKitContent()
+        ProjectileComponent.registerComponent()
+        RotationComponent.registerComponent()
+        ProjectileSystem.registerSystem()
+        RotationSystem.registerSystem()
     }
 
     var body: some SwiftUI.Scene {

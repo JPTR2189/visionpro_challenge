@@ -1,6 +1,7 @@
 import SwiftUI
 import RealityKit
 import ARKit
+import RealityKitContent
 
 struct PortalExperienceView: View {
 
@@ -20,12 +21,30 @@ struct PortalExperienceView: View {
     @State private var isClosingPortal = false
     @State private var currentRoundIndex = 0
     @State private var windAudioController: AudioPlaybackController?
+    @State private var handModel = HandTrackingModel()
+    @State private var rightFireballEntity: Entity?
+    @State private var leftFireballEntity: Entity?
+    @State private var rightFireballAudioEntity: Entity?
+    @State private var leftFireballAudioEntity: Entity?
+    @State private var rightFireballAudioController: AudioPlaybackController?
+    @State private var leftFireballAudioController: AudioPlaybackController?
+    @State private var rightFireballVisibilityTask: Task<Void, Never>?
+    @State private var leftFireballVisibilityTask: Task<Void, Never>?
+    @State private var fireballLoopResource: AudioFileResource?
+    @State private var fireballSpawnResource: AudioFileResource?
 
     private let roundSequenceLengths = [4, 6, 8]
+    private let fireballTargetScale: Float = 0.05
+    private let fireballHiddenScale: Float = 0.001
+    private let fireballPalmOffset = SIMD3<Float>(0, 0.1, 0)
+    private let fireballAnimationDuration: UInt64 = 350_000_000
+    private let fireballProjectileSpeed: Float = 2.5
+    private let fireballPortalImpactPadding: UInt64 = 120_000_000
 
     var body: some View {
         RealityView { content in
             content.add(sceneRoot)
+            await loadFireballContent(into: content)
         }
         .task { scanningMaterial = TextureMaterialLoader.createScanningMaterial() }
         .task { wallMaterial = await TextureMaterialLoader.loadWallMaterial() }
@@ -33,13 +52,57 @@ struct PortalExperienceView: View {
         .task { await appModel.arSession.run() }
         .task { await processRoomUpdates() }
         .task { await processMeshUpdates() }
+        .task { await configureFireballTracking() }
+        .task { await handModel.start() }
         .onChange(of: appModel.shouldRevealEnvironment) { _, shouldReveal in
             if shouldReveal {
                 revealEnvironment()
             }
         }
+        .onChange(of: handModel.rightSphereShouldAppear) { _, shouldAppear in
+            updateFireballVisibility(
+                rightFireballEntity,
+                audioEntity: rightFireballAudioEntity,
+                audioController: &rightFireballAudioController,
+                visibilityTask: &rightFireballVisibilityTask,
+                show: shouldAppear && isWaitingForClosingTap,
+                translation: fireballPalmOffset
+            )
+        }
+        .onChange(of: handModel.leftSphereShouldAppear) { _, shouldAppear in
+            updateFireballVisibility(
+                leftFireballEntity,
+                audioEntity: leftFireballAudioEntity,
+                audioController: &leftFireballAudioController,
+                visibilityTask: &leftFireballVisibilityTask,
+                show: shouldAppear && isWaitingForClosingTap,
+                translation: fireballPalmOffset
+            )
+        }
+        .onChange(of: handModel.rightThrowTriggered) { _, triggered in
+            guard triggered else { return }
+            throwFireball(
+                from: rightFireballEntity,
+                at: handModel.rightPalmWorldPosition,
+                direction: handModel.rightThrowDirection
+            )
+            handModel.resetThrowTrigger(isRight: true)
+        }
+        .onChange(of: handModel.leftThrowTriggered) { _, triggered in
+            guard triggered else { return }
+            throwFireball(
+                from: leftFireballEntity,
+                at: handModel.leftPalmWorldPosition,
+                direction: handModel.leftThrowDirection
+            )
+            handModel.resetThrowTrigger(isRight: false)
+        }
         .onDisappear {
             windAudioController?.stop()
+            rightFireballAudioController?.stop()
+            leftFireballAudioController?.stop()
+            rightFireballVisibilityTask?.cancel()
+            leftFireballVisibilityTask?.cancel()
             AudioManager.shared.playClosePortal()
             if appModel.shouldOpenMainWindowOnImmersiveDisappear {
                 openWindow(id: "MainWindow")
@@ -54,6 +117,272 @@ struct PortalExperienceView: View {
                     handleRuneTap(value.entity)
                 }
         )
+    }
+
+    @MainActor
+    private func loadFireballContent(into content: RealityViewContent) async {
+        await loadFireballAudioResources()
+        await addFireballAnchor(
+            to: content,
+            chirality: .right,
+            angularSpeed: RotationComponent.clockwise,
+            fireballEntity: $rightFireballEntity,
+            audioEntity: $rightFireballAudioEntity
+        )
+        await addFireballAnchor(
+            to: content,
+            chirality: .left,
+            angularSpeed: RotationComponent.counterClockwise,
+            fireballEntity: $leftFireballEntity,
+            audioEntity: $leftFireballAudioEntity
+        )
+    }
+
+    @MainActor
+    private func loadFireballAudioResources() async {
+        if fireballLoopResource == nil {
+            fireballLoopResource = try? await AudioFileResource(
+                named: "/Root/Sphere/FireSpatialAudio/fire_sound",
+                from: "FireBall.usda",
+                in: realityKitContentBundle
+            )
+        }
+
+        if fireballSpawnResource == nil {
+            fireballSpawnResource = try? await AudioFileResource(
+                named: "/Root/Sphere/FireSpawnSpatialAudio/spawn_fire",
+                from: "FireBall.usda",
+                in: realityKitContentBundle
+            )
+        }
+    }
+
+    @MainActor
+    private func addFireballAnchor(
+        to content: RealityViewContent,
+        chirality: AnchoringComponent.Target.Chirality,
+        angularSpeed: Float,
+        fireballEntity: Binding<Entity?>,
+        audioEntity: Binding<Entity?>
+    ) async {
+        guard fireballEntity.wrappedValue == nil,
+              let fireball = try? await Entity(named: "FireBall", in: realityKitContentBundle) else {
+            return
+        }
+
+        let anchor = AnchorEntity(.hand(chirality, location: .palm))
+        fireball.scale = SIMD3<Float>(repeating: fireballHiddenScale)
+        fireball.position = fireballPalmOffset
+        fireball.components.set(RotationComponent(angularSpeed: angularSpeed))
+        fireball.isEnabled = false
+
+        anchor.addChild(fireball)
+        content.add(anchor)
+
+        fireballEntity.wrappedValue = fireball
+        audioEntity.wrappedValue = fireball.findEntity(named: "Sphere")
+    }
+
+    @MainActor
+    private func configureFireballTracking() async {
+        _ = await HeadTracker.shared.start()
+        handModel.deviceForwardProvider = {
+            guard let transform = HeadTracker.shared.currentHeadTransform() else { return nil }
+            let forward = -SIMD3<Float>(
+                transform.columns.2.x,
+                transform.columns.2.y,
+                transform.columns.2.z
+            )
+            let horizontal = SIMD3<Float>(forward.x, 0, forward.z)
+            guard length(horizontal) > 0.001 else { return nil }
+            return normalize(horizontal)
+        }
+    }
+
+    @MainActor
+    private func updateFireballVisibility(
+        _ entity: Entity?,
+        audioEntity: Entity?,
+        audioController: inout AudioPlaybackController?,
+        visibilityTask: inout Task<Void, Never>?,
+        show: Bool,
+        translation: SIMD3<Float>
+    ) {
+        visibilityTask?.cancel()
+
+        if show {
+            entity?.isEnabled = true
+            animateFireball(entity, show: true, translation: translation)
+
+            if let audioEntity, let fireballSpawnResource {
+                audioEntity.playAudio(fireballSpawnResource)
+            }
+
+            var fireController: AudioPlaybackController?
+            if let audioEntity, let fireballLoopResource {
+                fireController = audioEntity.prepareAudio(fireballLoopResource)
+            }
+            audioController = fireController
+
+            visibilityTask = Task { [fireController] in
+                try? await Task.sleep(nanoseconds: fireballAnimationDuration)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    setFireballRotation(on: entity, active: true)
+                }
+
+                try? await Task.sleep(nanoseconds: 1_000_000_000 - fireballAnimationDuration)
+                guard !Task.isCancelled else { return }
+                fireController?.play()
+            }
+        } else {
+            setFireballRotation(on: entity, active: false)
+            audioController?.stop()
+            audioController = nil
+            animateFireball(entity, show: false, translation: translation)
+
+            visibilityTask = Task {
+                try? await Task.sleep(nanoseconds: fireballAnimationDuration)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    entity?.isEnabled = false
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func animateFireball(_ entity: Entity?, show: Bool, translation: SIMD3<Float>) {
+        guard let entity else { return }
+        let scale = show ? fireballTargetScale : fireballHiddenScale
+        entity.move(
+            to: Transform(
+                scale: SIMD3<Float>(repeating: scale),
+                rotation: entity.transform.rotation,
+                translation: translation
+            ),
+            relativeTo: entity.parent,
+            duration: 0.3,
+            timingFunction: .easeInOut
+        )
+    }
+
+    @MainActor
+    private func setFireballRotation(on entity: Entity?, active: Bool) {
+        guard let entity,
+              var component = entity.components[RotationComponent.self] else {
+            return
+        }
+
+        component.isActive = active
+        entity.components.set(component)
+    }
+
+    @MainActor
+    private func throwFireball(
+        from handEntity: Entity?,
+        at palmWorldPosition: SIMD3<Float>,
+        direction: SIMD3<Float>
+    ) {
+        guard isWaitingForClosingTap,
+              let handEntity,
+              length(direction) > 0.001,
+              length(palmWorldPosition) > 0.001 else {
+            return
+        }
+
+        let fallbackDirection = normalize(direction)
+        let preliminarySpawnPosition = palmWorldPosition + fireballPalmOffset + fallbackDirection * 0.12
+        let targetPosition = portalFireballTargetPosition()
+        let launchDirection: SIMD3<Float>
+
+        if let targetPosition {
+            let targetDirection = targetPosition - preliminarySpawnPosition
+            launchDirection = length(targetDirection) > 0.001
+                ? normalize(targetDirection)
+                : fallbackDirection
+        } else {
+            launchDirection = fallbackDirection
+        }
+
+        let spawnPosition = palmWorldPosition + fireballPalmOffset + launchDirection * 0.12
+        let projectile = handEntity.clone(recursive: true)
+
+        projectile.components.remove(RotationComponent.self)
+        projectile.components.set(
+            ProjectileComponent(
+                direction: launchDirection,
+                speed: fireballProjectileSpeed
+            )
+        )
+        projectile.position = spawnPosition
+        projectile.scale = SIMD3<Float>(repeating: fireballTargetScale)
+        projectile.isEnabled = true
+
+        sceneRoot.addChild(projectile)
+
+        if let audioEntity = projectile.findEntity(named: "Sphere"),
+           let fireballLoopResource {
+            audioEntity.playAudio(fireballLoopResource)
+        }
+
+        rightFireballAudioController?.stop()
+        leftFireballAudioController?.stop()
+        updateFireballVisibility(
+            rightFireballEntity,
+            audioEntity: rightFireballAudioEntity,
+            audioController: &rightFireballAudioController,
+            visibilityTask: &rightFireballVisibilityTask,
+            show: false,
+            translation: fireballPalmOffset
+        )
+        updateFireballVisibility(
+            leftFireballEntity,
+            audioEntity: leftFireballAudioEntity,
+            audioController: &leftFireballAudioController,
+            visibilityTask: &leftFireballVisibilityTask,
+            show: false,
+            translation: fireballPalmOffset
+        )
+
+        isWaitingForClosingTap = false
+        isAcceptingRuneInput = false
+        if let portalScene {
+            PortalExperience.setClosingHitTargetEnabled(false, in: portalScene)
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(
+                nanoseconds: fireballImpactDelay(
+                    from: spawnPosition,
+                    to: targetPosition
+                )
+            )
+            closePortalAfterFinalTap()
+        }
+    }
+
+    @MainActor
+    private func portalFireballTargetPosition() -> SIMD3<Float>? {
+        guard let portalScene,
+              let portal = portalScene.findEntity(named: "MagicPortal") else {
+            return nil
+        }
+
+        return portal.visualBounds(relativeTo: nil).center
+    }
+
+    private func fireballImpactDelay(
+        from spawnPosition: SIMD3<Float>,
+        to targetPosition: SIMD3<Float>?
+    ) -> UInt64 {
+        guard let targetPosition else {
+            return 420_000_000
+        }
+
+        let distance = max(length(targetPosition - spawnPosition), 0.25)
+        let seconds = min(max(distance / fireballProjectileSpeed, 0.25), 0.85)
+        return UInt64(seconds * 1_000_000_000) + fireballPortalImpactPadding
     }
 
     @MainActor
