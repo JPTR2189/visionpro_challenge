@@ -35,7 +35,7 @@ struct TutorialFireballView: View {
             }
             .padding(.top, 40)
 
-            Image(uiImage: .tutorialFireball)
+//            Image(uiImage: .tutorialFireball)
         }
         .frame(width: 1300, height: 700)
         .overlay(alignment: .topTrailing) {

@@ -2,16 +2,12 @@ import SwiftUI
 import RealityKit
 
 struct PortalPlaceholderView: View {
+    var resourceName: String = "Portal+Runes"
+    var bundle: Bundle = .main
     private var portalURL: URL? {
-        Bundle.main.url(
-            forResource: "Scene - Portal+Runes - Lights Purple and Red",
-            withExtension: "usdz",
-            subdirectory: "Resources"
-        ) ?? Bundle.main.url(
-            forResource: "Scene - Portal+Runes - Lights Purple and Red",
-            withExtension: "usdz"
-        )
-    }
+           bundle.url(forResource: resourceName, withExtension: "usdz", subdirectory: "Resources")
+               ?? bundle.url(forResource: resourceName, withExtension: "usdz")
+       }
 
     var body: some View {
         if let url = portalURL {
